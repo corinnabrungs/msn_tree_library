@@ -3,3 +3,4 @@ numpy
 seaborn
 jupyter
 molmass
+git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
