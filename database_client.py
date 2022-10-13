@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from pubchempy import get_compounds, Compound
+from chembl_webresource_client.new_client import new_client as chembl
 import logging
 logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 
@@ -40,17 +41,24 @@ def search_pubchem_by_structure(smiles, inchi, inchikey) -> Compound | None:
     :return: first compound or None
     """
     compounds = None
-    if smiles:
+
+    if inchikey:
+        compounds = get_compounds(inchikey, "inchikey")
+    if not compounds and smiles:
         compounds = get_compounds(smiles, "smiles")
     if not compounds and inchi:
         compounds = get_compounds(inchi, "inchi")
-    if not compounds and inchikey:
-        compounds = get_compounds(inchikey, "inchikey")
-
-
     if not compounds:
         logging.info("NO PUBCHEM FOR: smiles:{}  inchi:{}   inchikey:{}".format(smiles, inchi, inchikey))
         return None
     else:
         compounds.sort(key=lambda comp: compound_score(comp), reverse=True)
         return compounds[0]
+
+
+def get_chembl_mol_by_inchikey(inchi_key):
+    try:
+        return chembl.molecule.filter(molecule_structures__standard_inchi_key=inchi_key)
+    except Exception as e:
+        logging.warning("Error during chembl query:",e)
+        return None

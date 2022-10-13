@@ -19,7 +19,7 @@ def add_suffix(filename, suffix):
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, p.suffix)
 
 
-def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True):
+def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -37,9 +37,13 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
     # calculate all identifiers from mol - exact_mass, ...
     if calc_identifiers:
         add_molid_columns(df)
+    # drop duplicates
+    df = df.drop_duplicates(['Product Name', 'lib_plate_well', "inchi_key"], keep="first").sort_index()
 
     # get PubChem information based on canonical_smiles and Inchi
-    # pubchem_search_by_structure(df)
+    if pubchem_search:
+        logging.info("Search PubChem by structure")
+        pubchem_search_by_structure(df)
 
 
 
@@ -61,7 +65,7 @@ def add_molid_columns(df):
     df["mol"] = [Chem.MolFromSmiles(smiles) if not pd.isnull(smiles) else np.NAN for smiles in df["Smiles"]]
     df["mol"] = [molid.chembl_standardize_mol(mol) if not pd.isnull(mol) else np.NAN for mol in df["mol"]]
     df["canonical_smiles"] = [molid.mol_to_canon_smiles(mol) for mol in df["mol"]]
-    # df["isomerical_smiles"] = [mol_to_canon_smiles(mol) for mol in df["mol"]]
+    df["Smiles"] = [molid.mol_to_isomeric_smiles(mol) for mol in df["mol"]]
     df["exact_mass"] = [molid.exact_mass_from_mol(mol) for mol in df["mol"]]
     df["inchi"] = [molid.inchi_from_mol(mol) for mol in df["mol"]]
     df["inchi_key"] = [molid.inchikey_from_mol(mol) for mol in df["mol"]]
@@ -77,7 +81,7 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
     compounds = [client.search_pubchem_by_name("CAS-{}".format(cas)) if pd.isnull(comp) else comp for comp, cas in
                  zip(compounds, df["CAS No."])]
 
-    df["pubchem_id"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
+    df["pubchem_cid"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
                                 dtype=pd.Int64Dtype())
     df["isomeric_smiles"] = [compound.isomeric_smiles if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["canonical_smiles"] = [compound.canonical_smiles if not pd.isnull(compound) else np.NAN for compound in
@@ -85,12 +89,12 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
 
     # concat the new structures with the old ones
     if "Smiles" in df:
-        dfa = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "Smiles", "pubchem_id", "isomeric_smiles",
+        dfa = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "Smiles", "pubchem_cid", "isomeric_smiles",
                   "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
                   "Clinical Information"]].copy()
 
         dfa["Source"] = "MCE"
-        dfb = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "pubchem_id", "isomeric_smiles",
+        dfb = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "pubchem_cid", "isomeric_smiles",
                   "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
                   "Clinical Information"]].copy()
         dfb["Smiles"] = dfb["isomeric_smiles"]
@@ -101,13 +105,12 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
     return df[df["Smiles"].notna()]
 
 def pubchem_search_by_structure(df) -> pd.DataFrame:
-    compounds = [client.search_pubchem_by_structure(smiles, inchi, inchikey) for smiles, inchi, inchikey in zip(df["canonical_smiles"], df["inchi"], df["inchi_key"])]
+    compounds = [client.search_pubchem_by_structure(inchikey, smiles, inchi) for inchikey, smiles, inchi in zip(df["inchi_key"], df["Smiles"], df["inchi"])]
 
-    df["pubchem_id"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
+    df["pubchem_cid_parent"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
                                 dtype=pd.Int64Dtype())
-    df["isomeric_smiles"] = [compound.isomeric_smiles if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["canonical_smiles"] = [compound.canonical_smiles if not pd.isnull(compound) else np.NAN for compound in
-                              compounds]
+    df["iupac"] = [compound.iupac_name if not pd.isnull(compound) else np.NAN for compound in compounds]
+
 
 if __name__ == "__main__":
     cleanup_file(r"data\test_metadata.tsv", query_pubchem=True)

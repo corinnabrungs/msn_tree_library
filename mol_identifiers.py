@@ -65,7 +65,7 @@ def split_smiles_major_mol(smiles):
 def exact_mass_from_mol(mol):
     try:
         # canonical
-        return Descriptors.ExactMolWt(mol)
+        return round(Descriptors.ExactMolWt(mol),6)
     except:
         return None
 
