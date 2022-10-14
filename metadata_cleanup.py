@@ -19,7 +19,7 @@ def add_suffix(filename, suffix):
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, p.suffix)
 
 
-def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True):
+def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True, chembl_search: bool = True):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -40,10 +40,15 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
     # drop duplicates
     df = df.drop_duplicates(['Product Name', 'lib_plate_well', "inchi_key"], keep="first").sort_index()
 
-    # get PubChem information based on canonical_smiles and Inchi
+    # get PubChem information based on inchikey, smiles, and Inchi
     if pubchem_search:
         logging.info("Search PubChem by structure")
-        pubchem_search_by_structure(df)
+        df = pubchem_search_by_structure(df)
+
+    # get ChEMBL information based on inchikey
+    if chembl_search:
+        logging.info("Search ChEMBL by inchikey")
+        chembl_search_by_inchikey(df)
 
 
 
@@ -105,11 +110,49 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
     return df[df["Smiles"].notna()]
 
 def pubchem_search_by_structure(df) -> pd.DataFrame:
-    compounds = [client.search_pubchem_by_structure(inchikey, smiles, inchi) for inchikey, smiles, inchi in zip(df["inchi_key"], df["Smiles"], df["inchi"])]
+    compounds = [client.search_pubchem_by_structure(smiles, inchi, inchikey) for inchikey, smiles, inchi in zip(df["inchi_key"], df["Smiles"], df["inchi"])]
 
     df["pubchem_cid_parent"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
                                 dtype=pd.Int64Dtype())
     df["iupac"] = [compound.iupac_name if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["synonyms"] = [compound.synonyms if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["pubchem_logp"] = [compound.xlogp if not pd.isnull(compound) else np.NAN for compound in compounds]
+
+
+    return df
+
+def chembl_search_by_inchikey(df) -> pd.DataFrame:
+    compounds = [client.get_chembl_mol_by_inchikey(inchi_key) for inchi_key in df["inchi_key"]]
+
+    df["chembl_id"] = [compound["molecule_chembl_id"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["compound_name"] = [compound["pref_name"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["molecular_species"] = [compound["molecule_properties"]["molecular_species"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["prodrug"] = [compound["prodrug"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["chembl_inchi"] = [compound["molecule_structures"]["standard_inchi"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["clinical_phase"] = [compound["max_phase"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["first_approval"] = [compound["first_approval"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn"] = [compound["withdrawn_flag"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_class"] = [compound["withdrawn_class"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_reason"] = [compound["withdrawn_reason"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_year"] = [compound["withdrawn_year"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_country"] = [compound["withdrawn_country"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["oral"] = [compound["oral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["parenteral"] = [compound["parenteral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["topical"] = [compound["topical"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["natural_product"] = [compound["natural_product"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["usan_stem_definition"] = [compound["usan_stem_definition"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["chembl_alogp"] = [compound["molecule_properties"]["alogp"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+
+
+    ## dont overwrite, append
+    # df["synonyms"] = [compound["molecule_synonyms"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["indication"] = [compound["indication_class"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+
+    df["inchi_equal"] = df["inchi"] == df["chembl_inchi"]
+    df["logp_equal"] = df["pubchem_logp"] == df["chembl_alogp"]
+    return df
+
 
 
 if __name__ == "__main__":

@@ -4,4 +4,6 @@ seaborn
 jupyter
 molmass
 chembl_webresource_client
+
+
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git

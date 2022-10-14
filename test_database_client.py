@@ -7,13 +7,13 @@ class TestDatabases(TestCase):
 
     def test_get_chembl_mol_by_inchikey(self):
         comp = database_client.get_chembl_mol_by_inchikey("SWMDAPWAQQTBOG-UHFFFAOYSA-N")
-        assert len(comp) == 1
-        assert comp[0]["max_phase"] == 4
-        assert comp[0]["molecule_chembl_id"] == 'CHEMBL3301594'
+        assert comp
+        assert comp["max_phase"] == 4
+        assert comp["molecule_chembl_id"] == 'CHEMBL3301594'
 
     def test_get_chembl_mol_by_wrong_inchikey(self):
         comp = database_client.get_chembl_mol_by_inchikey("coco")
-        assert len(comp) == 0
+        assert not comp
 
     def test_inchikey_list(self):
         inchikeys = """BGVLELSCIHASRV-QPEQYQDCSA-N
@@ -39,7 +39,25 @@ XDLYKKIQACFMJG-WKILWMFISA-N
 KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
         for inchikey in inchikeys:
             comp = database_client.get_chembl_mol_by_inchikey(inchikey)
-            assert len(comp) > 0
-            assert comp[0]["molecule_structures"]["standard_inchi_key"] == inchikey
+            assert comp
+            assert comp["molecule_structures"]["standard_inchi_key"] == inchikey
+
+
+    def test_get_chembl_mol_by_inchikey(self):
+        comp = database_client.get_chembl_mol_by_inchikey("LVWZTYCIRDMTEY-UHFFFAOYSA-N")
+        assert comp
+
+    def test_search_pubchem_by_name(self):
+        comp = database_client.search_pubchem_by_name("BGVLELSCIHASRV-QPEQYQDCSA-N")
+        assert comp
+
+    def test_search_pubchem_by_structure(self):
+        comp = database_client.search_pubchem_by_structure(inchikey="BGVLELSCIHASRV-QPEQYQDCSA-N")
+        assert comp
+
+    def test_get_openfda_information(self):
+        comp = database_client.get_openfda_information(r"PARACETAMOL")
+        assert comp
+
 
 
