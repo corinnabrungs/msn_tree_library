@@ -10,13 +10,16 @@ import logging
 # openfda by name (uppercase)
 OPENFDA_URL = r"https://api.fda.gov/other/substance.json?search=names.name:%22{}%22"
 
-#opfenfda by unii
-    # r"https://api.fda.gov/other/substance.json?search=unii:"{}""
-#openfda by substance name
-    # r"https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name:%22{}%22&limit=1"
-#openfda by cas
-    # r"https://api.fda.gov/other/substance.json?search=codes.code:"{}""
+# opfenfda by unii
+OPENFDA_UNII_URL = r"https://api.fda.gov/other/substance.json?search=unii:{}"
+# openfda by substance name
+# r"https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name:%22{}%22&limit=1"
+# openfda by cas
+# r"https://api.fda.gov/other/substance.json?search=codes.code:"{}""
 
+
+# drugcentral
+DRUGCENTRAL_URL = r"https://pharos-api.newdrugtargets.org/drugcentral?target_name={}"
 
 logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 
@@ -74,16 +77,27 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
         return compounds[0]
 
 
-def get_chembl_mol_by_inchikey(inchi_key):
+def get_chembl_mol(chembl_id=None, inchi_key=None):
     try:
-        compounds = chembl.molecule.filter(molecule_structures__standard_inchi_key=inchi_key)
+        if not (chembl_id or inchi_key):
+            raise ValueError("At least one chembl identifier needs to be a value")
+
+
+        if chembl_id:
+            comp = chembl.molecule.get(chembl_id)
+            if comp:
+                return comp
+
+        compounds = None
+        if not compounds and inchi_key:
+            compounds = chembl.molecule.filter(molecule_structures__standard_inchi_key=inchi_key)
         if not compounds:
-            logging.info("NO ChEMBL FOR: inchikey:{}".format(inchi_key))
+            logging.info("NO ChEMBL FOR: chembleid: {} or inchikey: {}".format(chembl_id, inchi_key))
             return None
         else:
             return compounds[0]
     except Exception as e:
-        logging.warning("Error during chembl query:",e)
+        logging.warning("Error during chembl query:", e)
         return None
 
 
@@ -93,4 +107,14 @@ def get_openfda_information(name):
     response.raise_for_status()
     return response.json()
 
-# def get drugcentral_information(name):
+def get_openfda_unii_information(unii):
+    url = OPENFDA_UNII_URL.format(unii)
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def get_drugcentral_information(name):
+    url = DRUGCENTRAL_URL.format(name)
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()

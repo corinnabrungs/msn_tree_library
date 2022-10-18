@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from datetime import date
+import re
 
 from molmass import Formula
 from rdkit.Chem import Descriptors
@@ -19,7 +20,35 @@ def add_suffix(filename, suffix):
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, p.suffix)
 
 
-def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True, chembl_search: bool = True):
+def ensure_synonyms_column(df: pd.DataFrame) -> pd.DataFrame:
+    df["synonyms"] = df.apply(lambda row: get_all_synonyms(row), axis=1)
+    return df
+
+def get_all_synonyms(row):
+    synonyms = [
+        get_or_else(row, "Product Name"),
+        get_or_else(row, "CAS No."),
+        get_or_else(row, "CAS"),
+    ]
+
+    old = row["synonyms"] if "synonyms" in row else None
+    if isinstance(old, str):
+        synonyms.append(old)
+    elif old is not None:
+        synonyms = synonyms + old
+
+    synonyms.extend([s.strip() for s in str(get_or_else(row, "Synonyms", "")).split(";")])
+
+    synonyms = [x.strip() for x in synonyms if x]
+    seen = set()
+    unique = [x for x in synonyms if x.lower() not in seen and not seen.add(x.lower())]
+    return unique
+
+def get_or_else(row, key, default=None):
+    return row[key] if key in row and not pd.isnull(row[key]) else default
+
+
+def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True, query_chembl: bool = True):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -27,6 +56,8 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
         df = pd.read_csv(metadata_file, sep="\t")
     else:
         df = pd.read_csv(metadata_file, sep=",")
+
+    ensure_synonyms_column(df)
 
     # Query pubchem by name and CAS
     if query_pubchem:
@@ -45,11 +76,14 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
         logging.info("Search PubChem by structure")
         df = pubchem_search_by_structure(df)
 
-    # get ChEMBL information based on inchikey
-    if chembl_search:
-        logging.info("Search ChEMBL by inchikey")
-        chembl_search_by_inchikey(df)
+    # extract ids like the UNII, ...
+    df = ensure_synonyms_column(df)
+    df = extract_synonym_ids(df)
 
+    # get ChEMBL information based on inchikey
+    if query_chembl:
+        logging.info("Search ChEMBL by chemblid or inchikey")
+        df = chembl_search(df)
 
 
     # drop mol
@@ -59,9 +93,9 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
     out_file = add_suffix(metadata_file, "cleaned")
     logging.info("Exporting to file %s", out_file)
     if metadata_file.endswith(".tsv"):
-        df.to_csv(out_file, sep="\t")
+        df.to_csv(out_file, sep="\t", index=False)
     else:
-        df.to_csv(out_file, sep=",")
+        df.to_csv(out_file, sep=",", index=False)
 
 
 def add_molid_columns(df):
@@ -94,12 +128,12 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
 
     # concat the new structures with the old ones
     if "Smiles" in df:
-        dfa = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "Smiles", "pubchem_cid", "isomeric_smiles",
+        dfa = df[["Cat. No.", "Product Name", "synonyms", "CAS No.", "Smiles", "pubchem_cid", "isomeric_smiles",
                   "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
                   "Clinical Information"]].copy()
 
         dfa["Source"] = "MCE"
-        dfb = df[["Cat. No.", "Product Name", "Synonyms", "CAS No.", "pubchem_cid", "isomeric_smiles",
+        dfb = df[["Cat. No.", "Product Name", "synonyms", "CAS No.", "pubchem_cid", "isomeric_smiles",
                   "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
                   "Clinical Information"]].copy()
         dfb["Smiles"] = dfb["isomeric_smiles"]
@@ -114,27 +148,26 @@ def pubchem_search_by_structure(df) -> pd.DataFrame:
 
     df["pubchem_cid_parent"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
                                 dtype=pd.Int64Dtype())
+    df["compound_name"] = [compound.synonyms[0] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["iupac"] = [compound.iupac_name if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["synonyms"] = [compound.synonyms if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["synonyms"] = df["synonyms"] + [compound.synonyms if not pd.isnull(compound) else [] for compound in compounds]
     df["pubchem_logp"] = [compound.xlogp if not pd.isnull(compound) else np.NAN for compound in compounds]
-
 
     return df
 
-def chembl_search_by_inchikey(df) -> pd.DataFrame:
-    compounds = [client.get_chembl_mol_by_inchikey(inchi_key) for inchi_key in df["inchi_key"]]
+def chembl_search(df) -> pd.DataFrame:
+    compounds = [client.get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in zip(df["chembl_id"], df["inchi_key"])]
 
     df["chembl_id"] = [compound["molecule_chembl_id"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["compound_name"] = [compound["pref_name"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    # df["compound_name"] = df["compound_name"] + [compound["pref_name"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["molecular_species"] = [compound["molecule_properties"]["molecular_species"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["prodrug"] = [compound["prodrug"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["chembl_inchi"] = [compound["molecule_structures"]["standard_inchi"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["clinical_phase"] = [compound["max_phase"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["first_approval"] = [compound["first_approval"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["first_approval"] = pd.array([compound["first_approval"] if not pd.isnull(compound) else np.NAN for compound in compounds], dtype=pd.Int64Dtype())
     df["withdrawn"] = [compound["withdrawn_flag"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["withdrawn_class"] = [compound["withdrawn_class"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["withdrawn_reason"] = [compound["withdrawn_reason"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["withdrawn_year"] = [compound["withdrawn_year"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_year"] = pd.array([compound["withdrawn_year"] if not pd.isnull(compound) else np.NAN for compound in compounds], dtype=pd.Int64Dtype())
     df["withdrawn_country"] = [compound["withdrawn_country"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["oral"] = [compound["oral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["parenteral"] = [compound["parenteral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
@@ -144,15 +177,41 @@ def chembl_search_by_inchikey(df) -> pd.DataFrame:
     df["chembl_alogp"] = [compound["molecule_properties"]["alogp"] if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] if not pd.isnull(compound) else np.NAN for compound in compounds]
 
-
-    ## dont overwrite, append
-    # df["synonyms"] = [compound["molecule_synonyms"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    ## dont overwrite
+    # df["synonyms"] = df["synonyms"] + [compound["molecule_synonyms"] if not pd.isnull(compound) else [] for compound in compounds]
     df["indication"] = [compound["indication_class"] if not pd.isnull(compound) else np.NAN for compound in compounds]
 
-    df["inchi_equal"] = df["inchi"] == df["chembl_inchi"]
-    df["logp_equal"] = df["pubchem_logp"] == df["chembl_alogp"]
     return df
 
+
+def find_unii(synonyms):
+    unii_generator = (re.sub('[ .;:\-]|UNII', '', name.upper()) for name in synonyms if "UNII" in name.upper())
+    return next(unii_generator, None)
+
+def find_schembl(synonyms):
+    schembl_generator = (name.upper() for name in synonyms if name.upper().startswith("SCHEMBL"))
+    return next(schembl_generator, None)
+
+def find_chembl_id(synonyms):
+    chembl_generator = (name.upper() for name in synonyms if name.upper().startswith("CHEMBL"))
+    return next(chembl_generator, None)
+
+def find_zinc(synonyms):
+    zinc_generator = (name.upper() for name in synonyms if name.upper().startswith("ZINC"))
+    return next(zinc_generator, None)
+
+def find_drugbank(synonyms):
+    drugbank_generator = (name.upper() for name in synonyms if name.upper().startswith("DB-"))
+    return next(drugbank_generator, None)
+
+def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
+    df["unii"] = [find_unii(synonyms) for synonyms in df["synonyms"]]
+    df["schembl_id"] = [find_schembl(synonyms) for synonyms in df["synonyms"]]
+    df["chembl_id"] = [find_chembl_id(synonyms) for synonyms in df["synonyms"]]
+    df["zinc_id"] = [find_zinc(synonyms) for synonyms in df["synonyms"]]
+    df["drugbank_id"] = [find_drugbank(synonyms) for synonyms in df["synonyms"]]
+
+    return df
 
 
 if __name__ == "__main__":
