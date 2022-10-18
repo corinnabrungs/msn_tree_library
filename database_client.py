@@ -100,7 +100,6 @@ def get_chembl_mol(chembl_id=None, inchi_key=None):
         logging.warning("Error during chembl query:", e)
         return None
 
-
 def get_openfda_information(name):
     url = OPENFDA_URL.format(name)
     response = requests.get(url)

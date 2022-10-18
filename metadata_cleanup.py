@@ -47,8 +47,69 @@ def get_all_synonyms(row):
 def get_or_else(row, key, default=None):
     return row[key] if key in row and not pd.isnull(row[key]) else default
 
+# query braod list
+def map_clinical_phase_to_number(phase):
+    match (str(phase)):
+        case "" | "None" | "NaN" | "nan" | "np.nan" | "0" | "No Development Reported":
+            return 0
+        case "Preclinical":
+            return 0.5
+        case "1" | "1.0" | "Phase 1":
+            return 1
+        case "2" | "2.0" | "Phase 2":
+            return 2
+        case "3" | "3.0" | "Phase 3":
+            return 3
+        case "4" | "4.0" | "Phase 4" | "Launched":
+            return 4
+        case _:
+            return phase
 
-def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True, query_chembl: bool = True):
+def get_clinical_phase_description(number):
+    match (str(number)):
+        case "" | "None" | "NaN" | "nan" | "np.nan" | "0" | "0.0":
+            return ""
+        case "0.5":
+            return "Preclinical"
+        case "1.0" | "1":
+            return "Phase 1"
+        case "2.0" | "2":
+            return "Phase 2"
+        case "3.0" | "3":
+            return "Phase 3"
+        case "4.0" | "4":
+            return "Launched"
+        case _:
+            return number
+
+def broad_list_search(df):
+    # download from: https://clue.io/repurposing#download-data
+    prefix = "broad_"
+    broad_df = pd.read_csv("data/broad_institute_drug_list.csv")
+    broad_df = broad_df.add_prefix(prefix)
+
+    if "split_inchi_key" not in df and "inchi_key" in df:
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+    broad_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in broad_df["{}InChIKey".format(prefix)]]
+    df['split_inchi_key'].isin(broad_df['split_inchi_key']).value_counts()
+
+    merged_df = pd.merge(df, broad_df, on="split_inchi_key", how="left")
+    merged_df["broad_clinical_phase"] = [map_clinical_phase_to_number(phase) for phase in
+                                         merged_df["broad_clinical_phase"]]
+    merged_df["clinical_phase"] = [map_clinical_phase_to_number(phase) for phase in merged_df["clinical_phase"]]
+    merged_df["Clinical Information"] = [map_clinical_phase_to_number(phase) for phase in
+                                         merged_df["Clinical Information"]]
+
+    merged_df["clinical_phase"] = merged_df[['broad_clinical_phase', 'clinical_phase', 'Clinical Information']].max(
+        axis=1)
+
+    merged_df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
+                                               merged_df["clinical_phase"]]
+    return merged_df.drop(["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)], axis=1)
+
+
+def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True,
+                 query_chembl: bool = True, query_broad_list=False):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -85,6 +146,11 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
         logging.info("Search ChEMBL by chemblid or inchikey")
         df = chembl_search(df)
 
+    # get broad institute information based on split inchikey
+    if query_broad_list:
+        logging.info("Search broad institute list of drugs by first block of inchikey")
+        df = broad_list_search(df)
+
 
     # drop mol
     df = df.drop('mol', axis=1)
@@ -108,6 +174,7 @@ def add_molid_columns(df):
     df["exact_mass"] = [molid.exact_mass_from_mol(mol) for mol in df["mol"]]
     df["inchi"] = [molid.inchi_from_mol(mol) for mol in df["mol"]]
     df["inchi_key"] = [molid.inchikey_from_mol(mol) for mol in df["mol"]]
+    df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
     df["formula"] = [molid.formula_from_mol(mol) for mol in df["mol"]]
     return df
 
@@ -215,6 +282,6 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True)
+    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True)
     # cleanup_file("data\lib_formatted_pubchem_mce.tsv", query_pubchem=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True)
