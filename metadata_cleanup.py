@@ -157,7 +157,7 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
 
     # export metadata file
     out_file = add_suffix(metadata_file, "cleaned")
-    logging.info("Exporting to file %s", out_file)
+    logging.info("Exporting to file %s", metadata_file)
     if metadata_file.endswith(".tsv"):
         df.to_csv(out_file, sep="\t", index=False)
     else:
