@@ -4,6 +4,7 @@ seaborn
 jupyter
 molmass
 chembl_webresource_client
-
+SQLAlchemy
+Postgres v14.5
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
