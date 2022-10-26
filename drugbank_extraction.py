@@ -3,6 +3,27 @@ import pandas as pd
 import logging
 
 
+def from_xml_node_path(node, path_list):
+    if node is None:
+        return None
+    if len(path_list) == 1:
+        return from_xml_node(node, path_list[0])
+    else:
+        return from_xml_node_path(node.find(path_list[0]), path_list[1:])
+
+
+def from_xml_node(node, node_id):
+    if node is None:
+        return None
+    subnode = node.find(node_id)
+    return subnode.text if subnode is not None else None
+
+
+def from_xml_attribute(node, node_id):
+    return node.attrib.get(node_id) if node else None
+
+
+
 def extraction_file(drugbank_file):
     logging.info("Will run on %s", drugbank_file)
 
@@ -10,25 +31,7 @@ def extraction_file(drugbank_file):
     root = tree.getroot()
 
     rows = []
-
-    def from_xml_node_path(node, path_list):
-        if node is None:
-            return None
-        if len(path_list) == 1:
-            return from_xml_node(node, path_list[0])
-        else:
-            return from_xml_node_path(node.find(path_list[0]), path_list[1:])
-
-    def from_xml_node(node, node_id):
-        if node is None:
-            return None
-        subnode = node.find(node_id)
-        return subnode.text if subnode is not None else None
-
-    def from_xml_attribute(node, node_id):
-        return node.attrib.get(node_id) if node else None
-
-    resources = ["PubChem Substance", "ChEMBL"]
+    resources = ["PubChem Compound", "ChEMBL"]
 
     for node in root:
         groups_node = node.find("groups")
@@ -38,6 +41,20 @@ def extraction_file(drugbank_file):
         mode_of_action = None
         food_interaction = None
         targets_node = None
+
+        smiles = None
+        inchikey = None
+
+        try:
+            calculated_properties_node = node.find("calculated-properties")
+            if calculated_properties_node:
+                smiles = next((from_xml_node(prop, "value") for prop in calculated_properties_node if
+                               from_xml_node(prop, "kind") == "SMILES"), None)
+                inchikey = next((from_xml_node(prop, "value") for prop in calculated_properties_node if
+                                 from_xml_node(prop, "kind") == "InChIKey"), None)
+        except:
+            pass
+
 
         try:
             atc_node = node.find("atc-codes").find("atc-code")
@@ -67,15 +84,18 @@ def extraction_file(drugbank_file):
         except:
             pass
 
-        col = ["drugbank_id", "name", "chembl_id", "pubchem_id", "cas", "unii"]
 
         rows.append({"drugbank_id": from_xml_node(node, "drugbank-id"),
                      "name": from_xml_node(node, "name"),
                      "chembl_id": next(filter(lambda d: str(d).startswith("CHEMBL"), external), None),
                      # currently we only extract pubchem and chembl, that's why this works (excluding chembl, only shows pubchem)
-                     "pubchem_id": next(filter(lambda d: not str(d).startswith("CHEMBL"), external), None),
+                     "pubchem_cid": next(filter(lambda d: not str(d).startswith("CHEMBL"), external), None),
                      "cas": from_xml_node(node, "cas-number"),
                      "unii": from_xml_node(node, "unii"),
+                     "smiles": smiles,
+                     "inchi_key": inchikey,
+                     "type": from_xml_attribute(node, "type"),
+                     "description": from_xml_node(node, "description"),
                      "approved": from_xml_node(groups_node, "group"),
                      "indication": from_xml_node(node, "indication"),
                      "pharmacodynamics": from_xml_node(node, "pharmacodynamics"),
@@ -98,4 +118,6 @@ def extraction_file(drugbank_file):
     db_df.to_csv("data/drugbank.tsv", sep="\t", index=False)
 
 if __name__ == "__main__":
-    extraction_file(r"data\drugbank_small.xml")
+    extraction_file(r"data\drugbank_database.xml")
+
+# download from: https://go.drugbank.com/releases/latest, approved access needed,

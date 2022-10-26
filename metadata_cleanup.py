@@ -91,25 +91,65 @@ def broad_list_search(df):
     if "split_inchi_key" not in df and "inchi_key" in df:
         df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
     broad_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in broad_df["{}InChIKey".format(prefix)]]
-    df['split_inchi_key'].isin(broad_df['split_inchi_key']).value_counts()
 
     merged_df = pd.merge(df, broad_df, on="split_inchi_key", how="left")
+    # converting the clinical phases (from broad institute, chembl, provider, or else) to numbers (remove phase, preclinic (as 0.5), or launched)
     merged_df["broad_clinical_phase"] = [map_clinical_phase_to_number(phase) for phase in
                                          merged_df["broad_clinical_phase"]]
     merged_df["clinical_phase"] = [map_clinical_phase_to_number(phase) for phase in merged_df["clinical_phase"]]
     merged_df["Clinical Information"] = [map_clinical_phase_to_number(phase) for phase in
                                          merged_df["Clinical Information"]]
-
+    # Comparing the clinical phases, only store the highest number in clinical phase column
     merged_df["clinical_phase"] = merged_df[['broad_clinical_phase', 'clinical_phase', 'Clinical Information']].max(
         axis=1)
-
+    # Converting numbers back to phase X, launched or preclinic
     merged_df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
                                                merged_df["clinical_phase"]]
     return merged_df.drop(["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)], axis=1)
 
 
+def find_in_drugbank(drugbank_df, row):
+    if pd.notnull(row["drugbank_id"]):
+        return row["drugbank_id"]
+
+    dbid = None
+    # pubchem id first, then CHEMBL, then synonyms
+    if row["inchi_key"]:
+        dbid = next((d for d in drugbank_df[drugbank_df["inchi_key"]==row["inchi_key"]]["drugbank_id"]), None)
+    if not dbid and row["pubchem_cid_parent"]:
+        dbid = next((d for d in drugbank_df[drugbank_df["pubchem_cid"]==row["pubchem_cid_parent"]]["drugbank_id"]), None)
+    if not dbid and row["chembl_id"]:
+        dbid = next((d for d in drugbank_df[drugbank_df["chembl_id"]==row["chembl_id"]]["drugbank_id"]), None)
+    if not dbid and row["unii"]:
+        dbid = next((d for d in drugbank_df[drugbank_df["unii"]==row["unii"]]["drugbank_id"]), None)
+    if not dbid and row["CAS No."]:
+        dbid = next((d for d in drugbank_df[drugbank_df["cas"]==row["CAS No."]]["drugbank_id"]), None)
+    if not dbid and row["split_inchi_key"]:
+        dbid = next((d for d in drugbank_df[drugbank_df["split_inchi_key"]==row["split_inchi_key"]]["drugbank_id"]), None)
+    # if not dbid and row["synonyms"]:
+    #     dbid = next((d for d in drugbank_df[drugbank_df["name"] in row["synonyms"]]["drugbank_id"]), None)
+    return dbid
+
+def drugbank_list_search(df):
+    # download from: https://go.drugbank.com/releases/latest, approved access needed, xml extraction to tsv by drugbank_extraction.py
+    prefix = "drugbank_"
+    drugbank_df = pd.read_csv("data/drugbank.tsv", sep="\t")
+    drugbank_df["pubchem_cid"] = pd.array(drugbank_df["pubchem_cid"], dtype=pd.Int64Dtype())
+
+    if "split_inchi_key" not in df and "inchi_key" in df:
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+    drugbank_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in drugbank_df["inchi_key"]]
+
+    df["drugbank_id"] = None
+    # find drugbank IDs in drugbank table by PubChem, ChEMBL etc
+    df["drugbank_id"] = df.apply(lambda row: find_in_drugbank(drugbank_df, row), axis=1)
+
+    drugbank_df = drugbank_df.add_prefix(prefix)
+    merged_df = pd.merge(df, drugbank_df, left_on="drugbank_id", right_on="drugbank_drugbank_id", how="left")
+    return merged_df.drop(["drugbank_drugbank_id"], axis=1)
+
 def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True,
-                 query_chembl: bool = True, query_broad_list=False):
+                 query_chembl: bool = True, query_broad_list=False, query_drugbank_list=False):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -151,6 +191,10 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
         logging.info("Search broad institute list of drugs by first block of inchikey")
         df = broad_list_search(df)
 
+        # get broad institute information based on split inchikey
+    if query_drugbank_list:
+        logging.info("Search drugbank list by ")
+        df = drugbank_list_search(df)
 
     # drop mol
     df = df.drop('mol', axis=1)
@@ -268,8 +312,24 @@ def find_zinc(synonyms):
     return next(zinc_generator, None)
 
 def find_drugbank(synonyms):
-    drugbank_generator = (name.upper() for name in synonyms if name.upper().startswith("DB-"))
-    return next(drugbank_generator, None)
+    for s in synonyms:
+        drug = cleanup_drugbank_id(s)
+        if drug:
+            return drug
+    return None
+    # drugbank_generator = (cleanup_drugbank_id(name) for name in synonyms)
+    # return next((db_id for db_id in drugbank_generator if db_id), None)
+
+
+def cleanup_drugbank_id(input):
+    pattern = "^DB.*\d"
+    anti_pattern = "[ACE-Z]"
+    input = input.upper()
+    if re.search(pattern, input) and not re.search(anti_pattern, input):
+        return re.sub("[^0-9DB]", "", input)
+    else:
+        return None
+
 
 def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
     df["unii"] = [find_unii(synonyms) for synonyms in df["synonyms"]]
@@ -282,6 +342,6 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True)
+    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True)
     # cleanup_file("data\lib_formatted_pubchem_mce.tsv", query_pubchem=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True)
