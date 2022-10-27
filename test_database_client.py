@@ -69,7 +69,7 @@ KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
         assert comp
 
     def test_get_drugcentral_information(self):
-        comp = database_client.get_drugcentral_information(r"Fostemsavir")
+        comp = database_client.get_drugcentral_information(r"remdesivir")
         assert comp
 
 

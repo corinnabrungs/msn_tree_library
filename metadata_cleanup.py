@@ -11,6 +11,7 @@ from pathlib import Path
 import logging
 import mol_identifiers as molid
 import database_client as client
+import drugcentral_postgresql_query as drugcentral_query
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
@@ -146,10 +147,29 @@ def drugbank_list_search(df):
 
     drugbank_df = drugbank_df.add_prefix(prefix)
     merged_df = pd.merge(df, drugbank_df, left_on="drugbank_id", right_on="drugbank_drugbank_id", how="left")
-    return merged_df.drop(["drugbank_drugbank_id"], axis=1)
+    return merged_df.drop(["drugbank_drugbank_id", "{}inchi_key".format(prefix), "{}smiles".format(prefix), "{}split_inchi_key".format(prefix)], axis=1)
+
+def drugcentral_search(df):
+    if "split_inchi_key" not in df and "inchi_key" in df:
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+    try:
+        drugcentral_query.connect()
+        results = [drugcentral_query.drugcentral_postgresql(inchikey, split_inchikey) for inchikey, split_inchikey in
+                 zip(df["inchi_key"], df["split_inchi_key"])]
+
+        data = [row[1] for row in results]
+        first_entry_columns = next((row[0] for row in results), [])
+        columns = [col.name for col in first_entry_columns]
+        dc_df = pd.DataFrame(data=data, columns=columns)
+
+        merged_df = pd.merge(df, dc_df, left_on="inchi_key", right_on="inchikey", how="left")
+        return merged_df
+    finally:
+        drugcentral_query.deconnect()
+
 
 def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bool = True, pubchem_search: bool = True,
-                 query_chembl: bool = True, query_broad_list=False, query_drugbank_list=False):
+                 query_chembl: bool = True, query_broad_list=False, query_drugbank_list=False, query_drugcentral=False):
     logging.info("Will run on %s", metadata_file)
 
     # import df
@@ -193,8 +213,12 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
 
         # get broad institute information based on split inchikey
     if query_drugbank_list:
-        logging.info("Search drugbank list by ")
+        logging.info("Search drugbank list by inchikey, pubchem_id, chembl_id, cas, split inchikey, etc.")
         df = drugbank_list_search(df)
+
+    if query_drugcentral:
+        logging.info("Search drugcentral by inchikey")
+        df = drugcentral_search(df)
 
     # drop mol
     df = df.drop('mol', axis=1)
@@ -342,6 +366,7 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True)
+    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+                 query_drugcentral=True)
     # cleanup_file("data\lib_formatted_pubchem_mce.tsv", query_pubchem=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True)
