@@ -91,8 +91,8 @@ def broad_list_search(df):
     broad_df = broad_df.add_prefix(prefix)
 
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
-    broad_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in broad_df["{}InChIKey".format(prefix)]]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in df['inchi_key']]
+    broad_df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in broad_df["{}InChIKey".format(prefix)]]
 
     merged_df = pd.merge(df, broad_df, on="split_inchi_key", how="left")
     # converting the clinical phases (from broad institute, chembl, provider, or else) to numbers (remove phase, preclinic (as 0.5), or launched)
@@ -139,8 +139,8 @@ def drugbank_list_search(df):
     drugbank_df["pubchem_cid"] = pd.array(drugbank_df["pubchem_cid"], dtype=pd.Int64Dtype())
 
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
-    drugbank_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in drugbank_df["inchi_key"]]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in df['inchi_key']]
+    drugbank_df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in drugbank_df["inchi_key"]]
 
     df["drugbank_id"] = None
     # find drugbank IDs in drugbank table by PubChem, ChEMBL etc
@@ -230,7 +230,7 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
 
     # export metadata file
     out_file = add_suffix(metadata_file, "cleaned")
-    logging.info("Exporting to file %s", metadata_file)
+    logging.info("Exporting to file %s", out_file)
     if metadata_file.endswith(".tsv"):
         df.to_csv(out_file, sep="\t", index=False)
     else:
