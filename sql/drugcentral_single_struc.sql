@@ -1,0 +1,1 @@
+select * from structures where inchikey = 'GKDRMWXFWHEQQT-UHFFFAOYSA-N';
