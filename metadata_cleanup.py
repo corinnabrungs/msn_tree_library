@@ -91,7 +91,7 @@ def broad_list_search(df):
     broad_df = broad_df.add_prefix(prefix)
 
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
     broad_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in broad_df["{}InChIKey".format(prefix)]]
 
     merged_df = pd.merge(df, broad_df, on="split_inchi_key", how="left")
@@ -139,7 +139,7 @@ def drugbank_list_search(df):
     drugbank_df["pubchem_cid"] = pd.array(drugbank_df["pubchem_cid"], dtype=pd.Int64Dtype())
 
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
     drugbank_df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in drugbank_df["inchi_key"]]
 
     df["drugbank_id"] = None
@@ -152,7 +152,7 @@ def drugbank_list_search(df):
 
 def drugcentral_search(df):
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in df['inchi_key']]
     try:
         drugcentral_query.connect()
         logging.info("Searching in DrugCentral")
@@ -161,15 +161,14 @@ def drugcentral_search(df):
         logging.info("DrugCentral search done")
 
         # row[1] is the data row[0] is the columns
-        data = [row[1] for row in results]
         first_entry_columns = next((row[0] for row in results), [])
         columns = [col.name for col in first_entry_columns]
+        elements = len(columns)
+        data = [row[1] if pd.notnull(row[1]) else (None, )*elements for row in results]
         dc_df = pd.DataFrame(data=data, columns=columns, index=df.index)
 
         return pd.concat([df, dc_df], axis=1)
 
-        # merged_df = pd.merge(df, dc_df, left_on="inchi_key", right_on="inchikey", how="left")
-        # return merged_df
     finally:
         drugcentral_query.deconnect()
 
@@ -372,7 +371,7 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    cleanup_file(r"data\test_metadata_small.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
                  query_drugcentral=True)
     # cleanup_file("data\lib_formatted_pubchem_mce.tsv", query_pubchem=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True)
