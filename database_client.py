@@ -19,7 +19,7 @@ OPENFDA_UNII_URL = r"https://api.fda.gov/other/substance.json?search=unii:{}"
 
 
 # drugcentral
-DRUGCENTRAL_URL = r"https://pharos-api.newdrugtargets.org/drugcentral?target_name={}"
+DRUGCENTRAL_URL = r"https://pharos-api.newdrugtargets.org/drugcentral?name={}%20"
 
 logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 
@@ -117,3 +117,4 @@ def get_drugcentral_information(name):
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
+

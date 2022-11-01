@@ -1,7 +1,13 @@
 from configparser import ConfigParser
 
 import logging
+from functools import lru_cache
+
 import psycopg2
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
+
+
+sql_file = open('data/drugcentral_dump_08222022.sql', "r")
 
 
 INCHIKEY_SQL = """
@@ -84,6 +90,17 @@ conn = None
 cur = None
 is_connected = False
 
+INFO = """
+1. Download postgresql 15 or later and install. On Windows: Locate pgAdmin or psql and create a new database, e.g.:
+"C:/Program Files/PostgreSQL/15/pgAdmin 4/bin/pgAdmin4.exe"
+"C:/Program Files/PostgreSQL/15/scripts/runpsql.bat"
+2. Windows users might want to add "cmd.exe /c chcp 1252" as the first line in the runpsql.bat script to avoid the warning about characters space not matching.
+3. Download the postgresql dump from https://drugcentral.org/download and unzip the .gz file (e.g., by 7-zip). 
+4. Run runpsql.bat and connect to the database (with the chosen name), in this console (make sure to use / instead of \\):
+5. Load all data by calling the command \i C:/data/drugcentral_dump_xy.sql
+6. Connect to the database using this script after changing the user, password, and database name in drugcentral_database.ini 
+"""
+
 
 def config(filename='drugcentral_database.ini', section='postgresql'):
     # create a parser
@@ -124,7 +141,8 @@ def connect():
         print(db_version)
         is_connected = True
     except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
+        logging.warning(error)
+        logging.warning(INFO)
 
 def deconnect():
     global cur, conn, is_connected
@@ -136,11 +154,12 @@ def deconnect():
         conn.close()
         print('Database connection closed.')
 
-
+@lru_cache
 def drugcentral_postgresql(inchikey=None, split_inchikey=None):
     global cur, is_connected
     if not is_connected:
-        print("First connect to the DrugCentral database")
+        logging.info("First connect to the DrugCentral database")
+        logging.warning(INFO)
         return None, None
     try:
         structure = None
@@ -159,8 +178,6 @@ def drugcentral_postgresql(inchikey=None, split_inchikey=None):
         else:
             return cur.description, structure
     except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
+        logging.warning(error)
+        return None, None
 
-
-if __name__ == '__main__':
-    drugcentral_postgresql()

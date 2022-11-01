@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import date
 import re
+from tqdm import tqdm
 
 from molmass import Formula
 from rdkit.Chem import Descriptors
@@ -151,19 +152,24 @@ def drugbank_list_search(df):
 
 def drugcentral_search(df):
     if "split_inchi_key" not in df and "inchi_key" in df:
-        df["split_inchi_key"] = [str(inchikey).split("-")[0] for inchikey in df['inchi_key']]
+        df["split_inchi_key"] = [str(inchikey).split("-")[0] if inchikey is not None else None for inchikey in df['inchi_key']]
     try:
         drugcentral_query.connect()
+        logging.info("Searching in DrugCentral")
         results = [drugcentral_query.drugcentral_postgresql(inchikey, split_inchikey) for inchikey, split_inchikey in
-                 zip(df["inchi_key"], df["split_inchi_key"])]
+                 tqdm(zip(df["inchi_key"], df["split_inchi_key"]))]
+        logging.info("DrugCentral search done")
 
+        # row[1] is the data row[0] is the columns
         data = [row[1] for row in results]
         first_entry_columns = next((row[0] for row in results), [])
         columns = [col.name for col in first_entry_columns]
-        dc_df = pd.DataFrame(data=data, columns=columns)
+        dc_df = pd.DataFrame(data=data, columns=columns, index=df.index)
 
-        merged_df = pd.merge(df, dc_df, left_on="inchi_key", right_on="inchikey", how="left")
-        return merged_df
+        return pd.concat([df, dc_df], axis=1)
+
+        # merged_df = pd.merge(df, dc_df, left_on="inchi_key", right_on="inchikey", how="left")
+        # return merged_df
     finally:
         drugcentral_query.deconnect()
 
