@@ -8,8 +8,6 @@ import psycopg2
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
-sql_file = open('data/drugcentral_dump_08222022.sql', "r")
-
 DRUGCENTRAL_SQL = """
 select structures.id, cas_reg_no, structures.name, structures.inchikey, inchi, smiles, substance_unii, structures.stem,
        string_agg(distinct stem.definition, ',') as "stem_definition",
@@ -56,9 +54,9 @@ EXTERNAL_IDS = {
     "drugbank_id": "i.id_type = 'DRUGBANK_ID' and i.identifier = '{}'",
     "chembl_id": "i.id_type = 'ChEMBL_ID' and i.identifier = '{}'",
     "pubchem_cid_parent": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
-    # "inchi_key": "structures.inchikey = '{}'",
-    # "compound_name": "lower(structures.name) ~ lower('{}')",
-    # "split_inchi_key": "structures.inchikey ~ '^{}'",
+    "inchi_key": "structures.inchikey = '{}'",
+    "compound_name": "lower(structures.name) ~ lower('{}')",
+    "split_inchi_key": "structures.inchikey ~ '^{}'",
 }
 
 conn = None
@@ -136,13 +134,16 @@ def drugcentral_for_row(row):
         if row is None:
             raise ValueError("Row needs to be defined")
 
+        logging.info("Running row {}".format(row["Product Name"]))
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)
                 if pd.notnull(value) and len(str(value))>0:
                     with conn.cursor() as cur:
                         try:
-                            cur.execute(DRUGCENTRAL_SQL.format(sql_condition.format(str(value))))
+                            query = DRUGCENTRAL_SQL.format(sql_condition.format(str(value)))
+                            # logging.info(query)
+                            cur.execute(query)
                             structure = cur.fetchone()
                             if structure:
                                 return cur.description, structure
