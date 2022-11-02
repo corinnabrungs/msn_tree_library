@@ -148,25 +148,31 @@ def drugbank_list_search(df):
 
     drugbank_df = drugbank_df.add_prefix(prefix)
     merged_df = pd.merge(df, drugbank_df, left_on="drugbank_id", right_on="drugbank_drugbank_id", how="left")
+    merged_df["unii"].fillna(merged_df["{}unii".format(prefix)])
+    merged_df["chembl_id"].fillna(merged_df["{}chembl_id".format(prefix)], inplace=True)
+    merged_df["compound_name"].fillna(merged_df["{}name".format(prefix)], inplace=True)
     return merged_df.drop(["drugbank_drugbank_id", "{}inchi_key".format(prefix), "{}smiles".format(prefix), "{}split_inchi_key".format(prefix)], axis=1)
 
 def drugcentral_search(df):
+    prefix = "drugcentral_"
     if "split_inchi_key" not in df and "inchi_key" in df:
         df["split_inchi_key"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in df['inchi_key']]
     try:
         drugcentral_query.connect()
         logging.info("Searching in DrugCentral")
-        results = [drugcentral_query.drugcentral_postgresql(inchikey, split_inchikey) for inchikey, split_inchikey in
-                 tqdm(zip(df["inchi_key"], df["split_inchi_key"]))]
+        results = df.apply(lambda row: drugcentral_query.drugcentral_for_row(row), axis=1)
+        # results = [drugcentral_query.drugcentral_for_row(row) for _,row in df.iterrows()]
+        # results = [drugcentral_query.drugcentral_postgresql(inchikey, split_inchikey) for inchikey, split_inchikey in
+        #          tqdm(zip(df["inchi_key"], df["split_inchi_key"]))]
         logging.info("DrugCentral search done")
 
         # row[1] is the data row[0] is the columns
-        first_entry_columns = next((row[0] for row in results), [])
+        first_entry_columns = next((row[0] for row in results if pd.notnull(row[0])), [])
         columns = [col.name for col in first_entry_columns]
         elements = len(columns)
         data = [row[1] if pd.notnull(row[1]) else (None, )*elements for row in results]
         dc_df = pd.DataFrame(data=data, columns=columns, index=df.index)
-
+        dc_df = dc_df.add_prefix(prefix)
         return pd.concat([df, dc_df], axis=1)
 
     finally:
@@ -222,7 +228,7 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
         df = drugbank_list_search(df)
 
     if query_drugcentral:
-        logging.info("Search drugcentral by inchikey")
+        logging.info("Search drugcentral by external identifier or inchikey")
         df = drugcentral_search(df)
 
     # drop mol
@@ -288,7 +294,7 @@ def pubchem_search_by_structure(df) -> pd.DataFrame:
 
     df["pubchem_cid_parent"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
                                 dtype=pd.Int64Dtype())
-    df["compound_name"] = [compound.synonyms[0] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["compound_name"] = [compound.synonyms[0] if not pd.isnull(compound) and compound.synonyms else np.NAN for compound in compounds]
     df["iupac"] = [compound.iupac_name if not pd.isnull(compound) else np.NAN for compound in compounds]
     df["synonyms"] = df["synonyms"] + [compound.synonyms if not pd.isnull(compound) else [] for compound in compounds]
     df["pubchem_logp"] = [compound.xlogp if not pd.isnull(compound) else np.NAN for compound in compounds]
@@ -371,7 +377,9 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data\test_metadata_small.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-                 query_drugcentral=True)
-    # cleanup_file("data\lib_formatted_pubchem_mce.tsv", query_pubchem=True)
-    # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True)
+    # cleanup_file(r"data\test_metadata_small.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    #              query_drugcentral=True)
+    # cleanup_file("data\lib_formatted_mce.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    #                  query_drugcentral=True)
+    cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+                     query_drugcentral=True)

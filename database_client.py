@@ -62,19 +62,30 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
         raise ValueError("At least one structure identifier needs to be a value")
 
     compounds = None
-
-    if inchikey:
-        compounds = get_compounds(inchikey, "inchikey")
-    if not compounds and smiles:
-        compounds = get_compounds(smiles, "smiles")
-    if not compounds and inchi:
-        compounds = get_compounds(inchi, "inchi")
-    if not compounds:
-        logging.info("NO PUBCHEM FOR: smiles:{}  inchi:{}   inchikey:{}".format(smiles, inchi, inchikey))
+    try:
+        if inchikey:
+            compounds = get_pubchem_compound(inchikey, "inchikey")
+        if not compounds and smiles:
+            compounds = get_pubchem_compound(smiles, "smiles")
+        if not compounds and inchi:
+            compounds = get_pubchem_compound(inchi, "inchi")
+        if not compounds:
+            logging.info("NO PUBCHEM FOR: smiles:{}  inchi:{}   inchikey:{}".format(smiles, inchi, inchikey))
+            return None
+        else:
+            compounds.sort(key=lambda comp: pubchem_compound_score(comp), reverse=True)
+            return compounds[0]
+    except:
+        logging.warning("FAILED PUBCHEM FOR: smiles:{}  inchi:{}   inchikey:{}".format(smiles, inchi, inchikey))
         return None
-    else:
-        compounds.sort(key=lambda comp: pubchem_compound_score(comp), reverse=True)
-        return compounds[0]
+
+
+def get_pubchem_compound(value, key):
+    try:
+        return get_compounds(value, key)
+    except:
+        logging.warning("FAILED PUBCHEM FOR: {} (as {})".format(value, key))
+        return None
 
 
 def get_chembl_mol(chembl_id=None, inchi_key=None):
