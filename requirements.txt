@@ -5,6 +5,9 @@ jupyter
 molmass
 chembl_webresource_client
 SQLAlchemy
-Postgres v14.5
+psycopg2
+rdkit
+tqdm
+pubchempy
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
