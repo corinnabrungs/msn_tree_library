@@ -421,9 +421,9 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    # cleanup_file(r"data\test_metadata_small.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    # cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #              query_drugcentral=True)
-    # cleanup_file("data\lib_formatted_mce.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    cleanup_file("data\lib_formatted_mce.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+                     query_drugcentral=True)
+    # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
-    cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-                 query_drugcentral=True)

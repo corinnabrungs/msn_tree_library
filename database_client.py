@@ -59,7 +59,7 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
     :return: first compound or None
     """
     if not (smiles or inchi or inchikey):
-        raise ValueError("At least one structure identifier needs to be a value")
+        return None
 
     compounds = None
     try:
