@@ -229,6 +229,7 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
     # get mol from smiles or inchi
     # calculate all identifiers from mol - exact_mass, ...
     if calc_identifiers:
+        logging.info("RDkit - predict properties")
         add_molid_columns(df)
     # drop duplicates
     df = df.drop_duplicates(['Product Name', 'lib_plate_well', "inchi_key"], keep="first").sort_index()
@@ -323,14 +324,20 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
     return df
 
 
+def get_first_synonym(compound):
+    synonyms = pubchem_get_synonyms(compound)
+    if synonyms is None or len(synonyms)<=0:
+        return None
+    return synonyms[0]
+
+
 def pubchem_search_by_structure(df) -> pd.DataFrame:
     compounds = [client.search_pubchem_by_structure(smiles, inchi, inchikey) for inchikey, smiles, inchi in
                  zip(df["inchi_key"], df["Smiles"], df["inchi"])]
 
     df["pubchem_cid_parent"] = pd.array([compound.cid if pd.notnull(compound) else np.NAN for compound in compounds],
                                         dtype=pd.Int64Dtype())
-    df["compound_name"] = [pubchem_get_synonyms(compound)[0] if len(pubchem_get_synonyms(compound))>0 else np.NAN for
-                           compound in compounds]
+    df["compound_name"] = [get_first_synonym(compound) for compound in compounds]
     df["iupac"] = [compound.iupac_name if pd.notnull(compound) else np.NAN for compound in compounds]
     try:
         df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if pd.notnull(compound) else [] for compound in compounds]

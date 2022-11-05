@@ -97,7 +97,7 @@ def get_pubchem_compound(value, key):
 
 
 @memory.cache
-def pubchem_get_synonyms(compound, try_n, max_tries=3):
+def pubchem_get_synonyms(compound, try_n=1, max_tries=10):
     """
     Try to get synonyms with a maximum retry
     :param compound:
@@ -108,12 +108,16 @@ def pubchem_get_synonyms(compound, try_n, max_tries=3):
     if pd.isnull(compound):
         return []
     try:
-        return compound.synonyms
+        synonyms = compound.synonyms
+        if synonyms is not None:
+            return synonyms
+        else:
+            return []
     except:
         if try_n<max_tries:
             pubchem_get_synonyms(compound, try_n=try_n+1, max_tries=max_tries)
         else:
-            logging.exception("Failed to retrieve synonyms for compound"+compound.cid)
+            logging.exception("Failed to retrieve synonyms for compound {}".format(compound.cid))
             return []
 
 
