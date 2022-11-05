@@ -11,7 +11,10 @@ from pathlib import Path
 import logging
 import mol_identifiers as molid
 import database_client as client
+from database_client import pubchem_get_synonyms
 import drugcentral_postgresql_query as drugcentral_query
+
+
 
 from tqdm import tqdm
 
@@ -37,10 +40,13 @@ def get_all_synonyms(row):
     ]
 
     old = row["synonyms"] if "synonyms" in row else None
-    if isinstance(old, str):
-        synonyms.append(old)
-    elif old is not None:
-        synonyms = synonyms + old
+    try:
+        if isinstance(old, str):
+            synonyms.append(old)
+        elif old is not None:
+            synonyms = synonyms + old
+    except:
+        logging.exception("Cannot concat synonyms")
 
     synonyms.extend([s.strip() for s in str(get_or_else(row, "Synonyms", "")).split(";")])
 
@@ -51,7 +57,7 @@ def get_all_synonyms(row):
 
 
 def get_or_else(row, key, default=None):
-    return row[key] if key in row and not pd.isnull(row[key]) else default
+    return row[key] if key in row and pd.notnull(row[key]) else default
 
 
 # query braod list
@@ -126,23 +132,27 @@ def find_in_drugbank(drugbank_df, row):
 
     dbid = None
     # pubchem id first, then CHEMBL, then synonyms
-    if row["inchi_key"]:
+    if pd.notnull(row["inchi_key"]):
         dbid = next((d for d in drugbank_df[drugbank_df["inchi_key"] == row["inchi_key"]]["drugbank_id"]), None)
-    if not dbid and row["pubchem_cid_parent"]:
+    if isnull(dbid) and not isnull(row["pubchem_cid_parent"]):
         dbid = next((d for d in drugbank_df[drugbank_df["pubchem_cid"] == row["pubchem_cid_parent"]]["drugbank_id"]),
                     None)
-    if not dbid and row["chembl_id"]:
+    if isnull(dbid) and pd.notnull(row["chembl_id"]):
         dbid = next((d for d in drugbank_df[drugbank_df["chembl_id"] == row["chembl_id"]]["drugbank_id"]), None)
-    if not dbid and row["unii"]:
+    if isnull(dbid) and pd.notnull(row["unii"]):
         dbid = next((d for d in drugbank_df[drugbank_df["unii"] == row["unii"]]["drugbank_id"]), None)
-    if not dbid and row["CAS No."]:
+    if isnull(dbid) and pd.notnull(row["CAS No."]):
         dbid = next((d for d in drugbank_df[drugbank_df["cas"] == row["CAS No."]]["drugbank_id"]), None)
-    if not dbid and row["split_inchi_key"]:
+    if isnull(dbid) and pd.notnull(row["split_inchi_key"]):
         dbid = next((d for d in drugbank_df[drugbank_df["split_inchi_key"] == row["split_inchi_key"]]["drugbank_id"]),
                     None)
-    # if not dbid and row["synonyms"]:
+    # if pd.isnull(dbid) and row["synonyms"]:
     #     dbid = next((d for d in drugbank_df[drugbank_df["name"] in row["synonyms"]]["drugbank_id"]), None)
     return dbid
+
+
+def isnull(o):
+    return str(o) == '<NA>' or o == "N/A" or o == "NA" or o==None or pd.isnull(o)
 
 
 def drugbank_list_search(df):
@@ -253,6 +263,7 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
 
     # drop mol
     df = df.drop('mol', axis=1)
+    df = df.drop_duplicates(['Product Name', 'lib_plate_well', "inchi_key"], keep="first").sort_index()
 
     # export metadata file
     logging.info("Exporting to file %s", out_file)
@@ -264,10 +275,10 @@ def cleanup_file(metadata_file, query_pubchem: bool = True, calc_identifiers: bo
 
 def add_molid_columns(df):
     # first strip any salts
-    df["Smiles"] = [molid.split_smiles_major_mol(smiles) if not pd.isnull(smiles) else np.NAN for smiles in
+    df["Smiles"] = [molid.split_smiles_major_mol(smiles) if pd.notnull(smiles) else np.NAN for smiles in
                     df["Smiles"]]
-    df["mol"] = [Chem.MolFromSmiles(smiles) if not pd.isnull(smiles) else np.NAN for smiles in df["Smiles"]]
-    df["mol"] = [molid.chembl_standardize_mol(mol) if not pd.isnull(mol) else np.NAN for mol in df["mol"]]
+    df["mol"] = [Chem.MolFromSmiles(smiles) if pd.notnull(smiles) else np.NAN for smiles in df["Smiles"]]
+    df["mol"] = [molid.chembl_standardize_mol(mol) if pd.notnull(mol) else np.NAN for mol in df["mol"]]
     df["canonical_smiles"] = [molid.mol_to_canon_smiles(mol) for mol in df["mol"]]
     df["Smiles"] = [molid.mol_to_isomeric_smiles(mol) for mol in df["mol"]]
     df["exact_mass"] = [molid.exact_mass_from_mol(mol) for mol in df["mol"]]
@@ -279,48 +290,53 @@ def add_molid_columns(df):
 
 
 def pubchem_search_structure_by_name(df) -> pd.DataFrame:
-    compounds = [client.search_pubchem_by_name(str(cas)) if not pd.isnull(cas) else np.NAN for cas in df["CAS No."]]
+    compounds = [client.search_pubchem_by_name(str(cas)) if pd.notnull(cas) else np.NAN for cas in df["CAS No."]]
     compounds = [client.search_pubchem_by_name(str(name)) if pd.isnull(comp) else comp for comp, name in
                  zip(compounds, df["Product Name"])]
     # only one compound was found as CAS-
     compounds = [client.search_pubchem_by_name("CAS-{}".format(cas)) if pd.isnull(comp) else comp for comp, cas in
                  zip(compounds, df["CAS No."])]
 
-    df["pubchem_cid"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
+    df["pubchem_cid"] = pd.array([compound.cid if pd.notnull(compound) else np.NAN for compound in compounds],
                                  dtype=pd.Int64Dtype())
-    df["isomeric_smiles"] = [compound.isomeric_smiles if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["canonical_smiles"] = [compound.canonical_smiles if not pd.isnull(compound) else np.NAN for compound in
+    df["isomeric_smiles"] = [compound.isomeric_smiles if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["canonical_smiles"] = [compound.canonical_smiles if pd.notnull(compound) else np.NAN for compound in
                               compounds]
 
+    df = df[["Cat. No.", "Product Name", "synonyms", "CAS No.", "Smiles", "pubchem_cid", "isomeric_smiles",
+                  "canonical_smiles", "mixed_location_plate1", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
+                  "Clinical Information"]]
     # concat the new structures with the old ones
-    if "Smiles" in df:
-        dfa = df[["Cat. No.", "Product Name", "synonyms", "CAS No.", "Smiles", "pubchem_cid", "isomeric_smiles",
-                  "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
-                  "Clinical Information"]].copy()
+    if "Smiles" in df and len(df[df["Smiles"].notna()]) > 0:
+        dfa = df.copy()
 
         dfa["Source"] = "MCE"
-        dfb = df[["Cat. No.", "Product Name", "synonyms", "CAS No.", "pubchem_cid", "isomeric_smiles",
-                  "canonical_smiles", "lib_plate_well", "URL", "Target", "Information", "Pathway", "Research Area",
-                  "Clinical Information"]].copy()
+        dfb = df.copy()
         dfb["Smiles"] = dfb["isomeric_smiles"]
         dfb["Source"] = "PubChem"
 
         df = pd.concat([dfb, dfa], ignore_index=True, sort=False)
 
-    return df[df["Smiles"].notna()]
+    else:
+        df["Smiles"] = df["isomeric_smiles"]
+        df["Source"] = "PubChem"
+    return df
 
 
 def pubchem_search_by_structure(df) -> pd.DataFrame:
     compounds = [client.search_pubchem_by_structure(smiles, inchi, inchikey) for inchikey, smiles, inchi in
                  zip(df["inchi_key"], df["Smiles"], df["inchi"])]
 
-    df["pubchem_cid_parent"] = pd.array([compound.cid if not pd.isnull(compound) else np.NAN for compound in compounds],
+    df["pubchem_cid_parent"] = pd.array([compound.cid if pd.notnull(compound) else np.NAN for compound in compounds],
                                         dtype=pd.Int64Dtype())
-    df["compound_name"] = [compound.synonyms[0] if not pd.isnull(compound) and compound.synonyms else np.NAN for
+    df["compound_name"] = [pubchem_get_synonyms(compound)[0] if len(pubchem_get_synonyms(compound))>0 else np.NAN for
                            compound in compounds]
-    df["iupac"] = [compound.iupac_name if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["synonyms"] = df["synonyms"] + [compound.synonyms if not pd.isnull(compound) else [] for compound in compounds]
-    df["pubchem_logp"] = [compound.xlogp if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["iupac"] = [compound.iupac_name if pd.notnull(compound) else np.NAN for compound in compounds]
+    try:
+        df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if pd.notnull(compound) else [] for compound in compounds]
+    except:
+        logging.exception("No synonyms")
+    df["pubchem_logp"] = [compound.xlogp if pd.notnull(compound) else np.NAN for compound in compounds]
 
     return df
 
@@ -329,43 +345,43 @@ def chembl_search(df) -> pd.DataFrame:
     compounds = [client.get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in
                  zip(df["chembl_id"], df["inchi_key"])]
 
-    df["chembl_id"] = [compound["molecule_chembl_id"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    # df["compound_name"] = df["compound_name"] + [compound["pref_name"] if not pd.isnull(compound) else np.NAN for
+    df["chembl_id"] = [compound["molecule_chembl_id"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    # df["compound_name"] = df["compound_name"] + [compound["pref_name"] if pd.notnull(compound) else np.NAN for
     # compound in compounds]
     df["molecular_species"] = [
-        compound["molecule_properties"]["molecular_species"] if not pd.isnull(compound) else np.NAN for compound in
+        compound["molecule_properties"]["molecular_species"] if pd.notnull(compound) else np.NAN for compound in
         compounds]
-    df["prodrug"] = [compound["prodrug"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["clinical_phase"] = [compound["max_phase"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["prodrug"] = [compound["prodrug"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["clinical_phase"] = [compound["max_phase"] if pd.notnull(compound) else np.NAN for compound in compounds]
     df["first_approval"] = pd.array(
-        [compound["first_approval"] if not pd.isnull(compound) else np.NAN for compound in compounds],
+        [compound["first_approval"] if pd.notnull(compound) else np.NAN for compound in compounds],
         dtype=pd.Int64Dtype())
-    df["withdrawn"] = [compound["withdrawn_flag"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["withdrawn_class"] = [compound["withdrawn_class"] if not pd.isnull(compound) else np.NAN for compound in
+    df["withdrawn"] = [compound["withdrawn_flag"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["withdrawn_class"] = [compound["withdrawn_class"] if pd.notnull(compound) else np.NAN for compound in
                              compounds]
-    df["withdrawn_reason"] = [compound["withdrawn_reason"] if not pd.isnull(compound) else np.NAN for compound in
+    df["withdrawn_reason"] = [compound["withdrawn_reason"] if pd.notnull(compound) else np.NAN for compound in
                               compounds]
     df["withdrawn_year"] = pd.array(
-        [compound["withdrawn_year"] if not pd.isnull(compound) else np.NAN for compound in compounds],
+        [compound["withdrawn_year"] if pd.notnull(compound) else np.NAN for compound in compounds],
         dtype=pd.Int64Dtype())
-    df["withdrawn_country"] = [compound["withdrawn_country"] if not pd.isnull(compound) else np.NAN for compound in
+    df["withdrawn_country"] = [compound["withdrawn_country"] if pd.notnull(compound) else np.NAN for compound in
                                compounds]
-    df["oral"] = [compound["oral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["parenteral"] = [compound["parenteral"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["topical"] = [compound["topical"] if not pd.isnull(compound) else np.NAN for compound in compounds]
-    df["natural_product"] = [compound["natural_product"] if not pd.isnull(compound) else np.NAN for compound in
+    df["oral"] = [compound["oral"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["parenteral"] = [compound["parenteral"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["topical"] = [compound["topical"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["natural_product"] = [compound["natural_product"] if pd.notnull(compound) else np.NAN for compound in
                              compounds]
-    df["usan_stem_definition"] = [compound["usan_stem_definition"] if not pd.isnull(compound) else np.NAN for compound
+    df["usan_stem_definition"] = [compound["usan_stem_definition"] if pd.notnull(compound) else np.NAN for compound
                                   in compounds]
-    df["chembl_alogp"] = [compound["molecule_properties"]["alogp"] if not pd.isnull(compound) else np.NAN for compound
+    df["chembl_alogp"] = [compound["molecule_properties"]["alogp"] if pd.notnull(compound) else np.NAN for compound
                           in compounds]
-    df["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] if not pd.isnull(compound) else np.NAN for compound
+    df["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] if pd.notnull(compound) else np.NAN for compound
                           in compounds]
 
     ## dont overwrite
-    # df["synonyms"] = df["synonyms"] + [compound["molecule_synonyms"] if not pd.isnull(compound) else [] for
+    # df["synonyms"] = df["synonyms"] + [compound["molecule_synonyms"] if pd.notnull(compound) else [] for
     # compound in compounds]
-    df["indication"] = [compound["indication_class"] if not pd.isnull(compound) else np.NAN for compound in compounds]
+    df["indication"] = [compound["indication_class"] if pd.notnull(compound) else np.NAN for compound in compounds]
 
     return df
 
@@ -423,7 +439,7 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 if __name__ == "__main__":
     # cleanup_file(r"data\test_metadata.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #              query_drugcentral=True)
-    cleanup_file("data\lib_formatted_mce.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+    cleanup_file("data\mce_library.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
                      query_drugcentral=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)

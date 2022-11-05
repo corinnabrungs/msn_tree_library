@@ -6,6 +6,11 @@ from pubchempy import get_compounds, Compound
 from chembl_webresource_client.new_client import new_client as chembl
 import requests
 import logging
+# from diskcache import Cache
+# cache = Cache("tmpcache")
+from joblib import Memory
+memory = Memory("memcache")
+
 
 # openfda by name (uppercase)
 OPENFDA_URL = r"https://api.fda.gov/other/substance.json?search=names.name:%22{}%22"
@@ -31,6 +36,8 @@ def pubchem_compound_score(comp: Compound):
     return 1000 - str(smiles).count(".")
 
 
+
+@memory.cache
 def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
     """
     In pubchem many entries contain the cas as an alternative name - so searching for cas in name works often
@@ -80,12 +87,35 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
         return None
 
 
+@memory.cache
 def get_pubchem_compound(value, key):
     try:
         return get_compounds(value, key)
     except:
         logging.warning("FAILED PUBCHEM FOR: {} (as {})".format(value, key))
         return None
+
+
+@memory.cache
+def pubchem_get_synonyms(compound, try_n, max_tries=3):
+    """
+    Try to get synonyms with a maximum retry
+    :param compound:
+    :param try_n: current call
+    :param max_tries: maximum tries
+    :return: the synonyms or an empty list on maximum number of tries with fail
+    """
+    if pd.isnull(compound):
+        return []
+    try:
+        return compound.synonyms
+    except:
+        if try_n<max_tries:
+            pubchem_get_synonyms(compound, try_n=try_n+1, max_tries=max_tries)
+        else:
+            logging.exception("Failed to retrieve synonyms for compound"+compound.cid)
+            return []
+
 
 
 def get_chembl_mol(chembl_id=None, inchi_key=None):
@@ -103,7 +133,7 @@ def get_chembl_mol(chembl_id=None, inchi_key=None):
         if not compounds and inchi_key:
             compounds = chembl.molecule.filter(molecule_structures__standard_inchi_key=inchi_key)
         if not compounds:
-            logging.info("NO ChEMBL FOR: chembleid: {} or inchikey: {}".format(chembl_id, inchi_key))
+            logging.info("NO ChEMBL FOR: chemblid: {} or inchikey: {}".format(chembl_id, inchi_key))
             return None
         else:
             return compounds[0]
