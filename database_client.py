@@ -2,6 +2,7 @@ import json
 
 import pandas as pd
 import numpy as np
+import pubchempy
 from pubchempy import get_compounds, Compound
 from chembl_webresource_client.new_client import new_client as chembl
 import requests
@@ -9,8 +10,8 @@ import logging
 # from diskcache import Cache
 # cache = Cache("tmpcache")
 from joblib import Memory
-memory = Memory("memcache")
 
+memory = Memory("memcache")
 
 # openfda by name (uppercase)
 OPENFDA_URL = r"https://api.fda.gov/other/substance.json?search=names.name:%22{}%22"
@@ -36,7 +37,6 @@ def pubchem_compound_score(comp: Compound):
     return 1000 - str(smiles).count(".")
 
 
-
 @memory.cache
 def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
     """
@@ -54,6 +54,22 @@ def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
     else:
         compounds.sort(key=lambda comp: pubchem_compound_score(comp), reverse=True)
         return compounds[0]
+
+
+@memory.cache
+def pubchem_by_cid(cid) -> Compound | None:
+    return _pubchem_by_cid(cid)
+
+
+def _pubchem_by_cid(cid, ntry=1, max_tries=10) -> Compound | None:
+    try:
+        return pubchempy.Compound.from_cid(cid)
+    except:
+        if ntry < max_tries:
+            return _pubchem_by_cid(cid, ntry=ntry + 1, max_tries=max_tries)
+        else:
+            logging.exception("Cannot retrieve pubchem CID {}".format(cid))
+            return None
 
 
 def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compound | None:
@@ -89,15 +105,26 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
 
 @memory.cache
 def get_pubchem_compound(value, key):
+    return _get_pubchem_compound(value, key)
+
+
+def _get_pubchem_compound(value, key, ntry=1, max_tries=10):
     try:
         return get_compounds(value, key)
     except:
-        logging.warning("FAILED PUBCHEM FOR: {} (as {})".format(value, key))
-        return None
+        if ntry < max_tries:
+            return _get_pubchem_compound(value, key, ntry + 1, max_tries)
+        else:
+            logging.warning("FAILED PUBCHEM FOR: {} (as {})".format(value, key))
+            return None
 
 
 @memory.cache
-def pubchem_get_synonyms(compound, try_n=1, max_tries=10):
+def pubchem_get_synonyms(compound):
+    return _pubchem_get_synonyms(compound)
+
+
+def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
     """
     Try to get synonyms with a maximum retry
     :param compound:
@@ -114,19 +141,17 @@ def pubchem_get_synonyms(compound, try_n=1, max_tries=10):
         else:
             return []
     except:
-        if try_n<max_tries:
-            pubchem_get_synonyms(compound, try_n=try_n+1, max_tries=max_tries)
+        if try_n < max_tries:
+            return pubchem_get_synonyms(compound, try_n=try_n + 1, max_tries=max_tries)
         else:
             logging.exception("Failed to retrieve synonyms for compound {}".format(compound.cid))
             return []
-
 
 
 def get_chembl_mol(chembl_id=None, inchi_key=None):
     try:
         if not (chembl_id or inchi_key):
             raise ValueError("At least one chembl identifier needs to be a value")
-
 
         if chembl_id:
             comp = chembl.molecule.get(chembl_id)
@@ -145,11 +170,13 @@ def get_chembl_mol(chembl_id=None, inchi_key=None):
         logging.warning("Error during chembl query:", e)
         return None
 
+
 def get_openfda_information(name):
     url = OPENFDA_URL.format(name)
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
+
 
 def get_openfda_unii_information(unii):
     url = OPENFDA_UNII_URL.format(unii)
@@ -157,9 +184,9 @@ def get_openfda_unii_information(unii):
     response.raise_for_status()
     return response.json()
 
+
 def get_drugcentral_information(name):
     url = DRUGCENTRAL_URL.format(name)
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
-

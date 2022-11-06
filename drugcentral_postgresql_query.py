@@ -144,7 +144,8 @@ def drugcentral_for_row(row):
         if row is None:
             raise ValueError("Row needs to be defined")
 
-        logging.info("Running row {}".format(row["Product Name"]))
+        if "Product Name" in row:
+            logging.info("Running row {}".format(row["Product Name"]))
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)

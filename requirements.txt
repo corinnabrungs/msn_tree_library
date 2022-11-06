@@ -9,5 +9,6 @@ psycopg2
 rdkit
 tqdm
 pubchempy
+pyteomics
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
