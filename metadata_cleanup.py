@@ -94,6 +94,13 @@ def get_clinical_phase_description(number):
         case _:
             return number
 
+def map_drugbank_approval(status):
+    match (str(status)):
+        case "approved" | "withdrawn":
+            return 4
+        case _:
+            return None
+
 
 def broad_list_search(df):
     # download from: https://clue.io/repurposing#download-data
@@ -122,9 +129,6 @@ def broad_list_search(df):
     # Comparing the clinical phases, only store the highest number in clinical phase column
     merged_df["clinical_phase"] = merged_df[['broad_clinical_phase', 'clinical_phase', 'Clinical Information']].max(
         axis=1)
-    # Converting numbers back to phase X, launched or preclinic
-    merged_df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
-                                               merged_df["clinical_phase"]]
     return merged_df.drop(["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)], axis=1)
 
 
@@ -214,7 +218,7 @@ def drugcentral_search(df):
         drugcentral_query.deconnect()
 
 
-def cleanup_file(metadata_file, id_columns=['gnps_libid', "inchi_key"], query_pubchem: bool = True,
+def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem: bool = True,
                  calc_identifiers: bool = True, pubchem_search: bool = True,
                  query_chembl: bool = True, query_broad_list=False, query_drugbank_list=False, query_drugcentral=False):
     logging.info("Will run on %s", metadata_file)
@@ -238,6 +242,7 @@ def cleanup_file(metadata_file, id_columns=['gnps_libid', "inchi_key"], query_pu
     if calc_identifiers:
         logging.info("RDkit - predict properties")
         add_molid_columns(df)
+        add_molid_columns(df) ## second time for removing salts, especially adducts previous [Na], now .Na
     # drop duplicates
     try:
         df = df.drop_duplicates(id_columns, keep="first").sort_index()
@@ -263,21 +268,45 @@ def cleanup_file(metadata_file, id_columns=['gnps_libid', "inchi_key"], query_pu
         logging.info("Search broad institute list of drugs by first block of inchikey")
         df = broad_list_search(df)
 
-        # get broad institute information based on split inchikey
+        # get drugbank information based on split inchikey
     if query_drugbank_list:
         logging.info("Search drugbank list by inchikey, pubchem_id, chembl_id, cas, split inchikey, etc.")
         df = drugbank_list_search(df)
+        if "drugbank_approved" in df.columns:
+            df["drugbank_approved_number"] = [map_drugbank_approval(status) for status in df["drugbank_approved"]]
+        else:
+            df["drugbank_approved_number"] = None
+        df["clinical_phase"] = df[
+            ['clinical_phase', 'drugbank_approved_number']].max(axis=1)
+        df["any_phase"] = df["drugbank_approved"].notna() | (df["clinical_phase"] > 0)
 
     if query_drugcentral:
         logging.info("Search drugcentral by external identifier or inchikey")
         df = drugcentral_search(df)
+        if "drugcentral_administration" in df.columns:
+            df["drugcentral_administration_number"] = [4 if pd.notnull(status) else None for status in
+                                                       df["drugcentral_administration"]]
+        else:
+            df["drugcentral_administration_number"] = None
+        df["clinical_phase"] = df[['clinical_phase', 'drugcentral_administration_number']].max(axis=1)
+        if "drugbank_approved" in df.columns:
+            df["any_phase"] = df["drugbank_approved"].notna() | (df["clinical_phase"] > 0)
+        else:
+            df["any_phase"] = df["clinical_phase"] > 0
 
+    # Converting numbers back to phase X, launched or preclinic
+    df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
+                                                   df["clinical_phase"]]
     # drop mol
     df = df.drop(columns=['mol', 'pubchem'])
+    df["none"] = df.isnull().sum(axis=1)
     try:
-        df = df.drop_duplicates(id_columns, keep="first").sort_index()
+        df = df.sort_values(by="none", ascending=True).drop_duplicates(
+            ["Product Name", "lib_plate_well", "exact_mass"], keep="first").sort_index()
     except:
         pass
+    # adding unique name
+    df["lib_plate_well_unique"] = df["lib_plate_well"] + "."
     # export metadata file
     logging.info("Exporting to file %s", out_file)
     if metadata_file.endswith(".tsv"):
@@ -329,15 +358,15 @@ def pubchem_search_by_names(row):
     if isnull(compound):
         compound = client.search_pubchem_by_structure(inchikey=row["inchi_key"], smiles=row["Smiles"],
                                                       inchi=row["inchi"])
-    if isnull(compound) and "compound_name" in row:
-        compound = client.search_pubchem_by_name(row["compound_name"])
+    if isnull(compound) and "compound_name" in row and notnull(row["compound_name"]):
+        compound = client.search_pubchem_by_name(str(row["compound_name"]))
+    if isnull(compound) and "CAS No." in row and notnull(row["CAS No."]):
+        compound = client.search_pubchem_by_name(row["CAS No."])
     if isnull(compound) and "Product Name" in row:
         compound = client.search_pubchem_by_name(row["Product Name"])
-    if isnull(compound) and "CAS No." in row:
-        compound = client.search_pubchem_by_name(row["CAS No."])
     # only one compound was found as CAS-
     if isnull(compound) and "CAS No." in row:
-        compound = client.search_pubchem_by_name("CAS-{}".format(row["compound_name"]))
+        compound = client.search_pubchem_by_name("CAS-{}".format(row["Product Name"]))
 
     return compound
 
@@ -367,7 +396,7 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
         ["pubchem", "Cat. No.", "Product Name", "synonyms", "CAS No.", "Smiles", "pubchem_cid", "pubchem_cid_parent",
          "isomeric_smiles",
          "canonical_smiles", "mixed_location_plate1", "lib_plate_well", "URL", "Target", "Information", "Pathway",
-         "Research Area", "Clinical Information", "gnps_libid", "compound_name", "iupac", "pubchem_logp"])
+         "Research Area", "Clinical Information", "gnps_libid", "compound_name", "iupac", "pubchem_logp", "entries"])
 
     df = df[df.columns[columns_to_keep]]
     # concat the new structures with the old ones
@@ -427,6 +456,7 @@ def chembl_search(df) -> pd.DataFrame:
         compound["molecule_properties"]["molecular_species"] if pd.notnull(compound) else np.NAN for compound in
         compounds]
     df["prodrug"] = [compound["prodrug"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["availability"] = [compound["availability_type"] if pd.notnull(compound) else np.NAN for compound in compounds]
     df["clinical_phase"] = [compound["max_phase"] if pd.notnull(compound) else np.NAN for compound in compounds]
     df["first_approval"] = pd.array(
         [compound["first_approval"] if pd.notnull(compound) else np.NAN for compound in compounds],
@@ -518,7 +548,10 @@ if __name__ == "__main__":
     #                  query_drugcentral=True)
     # cleanup_file("data\gnpslib\gnps_library_small.csv", id_columns=['gnps_libid', "inchi_key"], query_pubchem=True,
     #              query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
-    cleanup_file("data\gnpslib\gnps_library.csv", id_columns=['gnps_libid', "inchi_key"], query_pubchem=True,
-                 query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
+    # cleanup_file("data\gnpslib\gnps_library.csv", id_columns=['gnps_libid', "inchi_key"], query_pubchem=True,
+    #              query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
+    cleanup_file("data\\final_tables\mce_library_empty.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+                     query_drugcentral=True)
+
