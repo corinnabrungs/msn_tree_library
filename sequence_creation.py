@@ -1,105 +1,148 @@
 import pandas as pd
+from pandas import DataFrame
 from datetime import date
 from tqdm import tqdm
 import logging
+import os
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
+base_filename_header = "base_filename"
+
 
 def main():
-    metadata_file = r"data/nih/nih_library.tsv"
+    metadata_file = r"data/nih/nih_library_new_headers.tsv"
+    data_filepath = r"C:\Xcalibur\data\Corinna_Brungs"
 
     # define all variables
+    inject_volume_mul = 3
     lib_id = "pluskal_nih"
-    suffix = "_IT"  # is added to the end of the path and file names
-    plate_id_header = "mixed_location_plate"
-    current_date = date.today().strftime("%Y%m%d")
-
+    method_suffix = "TESTMETHOD"  # is added to the end of the path and file names
     instrument_method_positive = r"C:\Xcalibur\methods\Corinna_Brungs\IT_acquisition\IT_100AG_MS5_POS_mz115-2000"
     instrument_method_negative = r"C:\Xcalibur\methods\Corinna_Brungs\IT_acquisition\IT_100AG_MS5_NEG_mz115-2000"
 
     # plates are inserted into x compartment
+    # if plate is not named in the metadata table by plate_id_header column - leave the plate_id empty
+    plates_in_autosampler_location = [
+        # plate_id, location
+        ("15", "B"),
+        # ("", "B"),
+    ]
 
-    plates = ["15P"]
-    plate_loc_in_autosampler = ["B"]
+    # defaults need to match metadata table
+    unique_id_header = "unique_sample_id"
+    plate_id_header = "plate_id"  # plate id column. Plate ids can be any string or number
+    well_header = "well_location"  # defines the column with well locations, e.g., A1
+    current_date = date.today().strftime("%Y%m%d")
+
+    # NO NEED TO CHANGE ANYTHING BELOW
     # final values
-    unique_id_header = "lib_plate_well"
-    well_header = "final_plate_location"
+    data_filepath = os.path.join(data_filepath, lib_id, f"{current_date}_{method_suffix}")
     dataframes = []
 
-    for filter_plate, plate_location in zip(plates, plate_loc_in_autosampler):
-        df = create_orbitrap_sequence(lib_id, suffix, metadata_file, plate_id_header, unique_id_header, well_header,
-                                      instrument_method_positive, instrument_method_negative, plate_location,
-                                      filter_plate)
+    metadata_df = load_metadata_df(metadata_file, well_header, unique_id_header, method_suffix)
+    for plate_id, plate_location in plates_in_autosampler_location:
+        plate_df = filter_metadata_by_plate_id(metadata_df, plate_id, plate_id_header)
+
+        sequence_file = f"data/Sequence/{current_date}_seq_rack_{plate_location}_{lib_id}_{plate_id}_{method_suffix}"
+
+        df = create_orbitrap_sequence(plate_df, sequence_file, data_filepath, well_header, plate_location,
+                                      instrument_method_positive, instrument_method_negative, inject_volume_mul)
         dataframes.append(df)
 
     concat = pd.concat(dataframes)
 
-    plates_str = "_".join(["{}in{}".format(plate, loc) for plate, loc in zip(plates, plate_loc_in_autosampler)])
-    csv_file = f"data/Sequence/{current_date}_{plates_str}_seq_combined.csv"
-    write_thermo_sequence(csv_file, concat)
+    plates_str = "_".join(["{}in{}".format(plate_id, loc) for plate_id, loc in plates_in_autosampler_location])
+    sequence_file = f"data/Sequence/{current_date}_{plates_str}_seq_combined.csv"
+    write_thermo_sequence(sequence_file, concat)
 
 
-def create_orbitrap_sequence(lib_id, suffix, metadata_file, plate_id_header, unique_id_header, well_header,
-                             instrument_method_positive, instrument_method_negative, plate_location,
-                             filter_plate) -> pd.DataFrame:
+def create_orbitrap_sequence(metadata_df: DataFrame, sequence_file, data_filepath, well_header, plate_location,
+                             instrument_method_positive=None, instrument_method_negative=None,
+                             inject_volume_mul=3) -> DataFrame:
     """
     Creates Orbitrap sequence for positive and negative mode
 
-    :param lib_id: name of your library/analysis
-    :param suffix: suffix is added to the sequence file name right after the polarity - without an underscore _ so add one if wanted
-    :param metadata_file: file path
-    :param plate_id_header: file column header of plate and well location, e.g., Plate1_WellA1
-    :param unique_id_header: combining the lib_id + plate + well
+    :param data_filepath: data acquisition file path. polarity will be added
+    :param sequence_file: the base sequence file to export. polarity and file type csv will be added automatically
+    :param metadata_df: a dataframe that is already filtered to only contain samples from a single plate
     :param well_header: getting the well number of the final plate, e.g., A1
     :param instrument_method_positive: instrument method in positive mode
     :param instrument_method_negative: instrument method in negative mode
     :param plate_location: position in the autosampler
-    :param filter_plate: for multiple plates and position in the autosampler, Sequence for Plate 1 and Position Blue
     Sequence for Plate 2 and Position Green
+    :param inject_volume_mul: injection volume in micro liter
     :return:
     """
-    if suffix is None:
-        suffix = ''
-
-    current_date = date.today().strftime("%Y%m%d")
-    logging.info("Will run on %s", metadata_file)
+    if not instrument_method_positive and not instrument_method_negative:
+        raise ValueError("Provide at least one method file for positive or negative")
 
     instrument_methods = [instrument_method_positive, instrument_method_negative]
     polarities = ["positive", "negative"]
     dataframes = []
     for polarity, instrument_method in zip(polarities, instrument_methods):
-        # import df
-        if metadata_file.endswith(".tsv"):
-            df = pd.read_csv(metadata_file, sep="\t")
-        else:
-            df = pd.read_csv(metadata_file, sep=",")
+        if not instrument_method:
+            continue
 
-        # _id is added after the unique ID to securely substring search for the ID with number at the end
-        # otherwise A1_1 is also contained A1_10 --> needs suffix
-        df[unique_id_header] = ["{}_{}_id".format(lib_id, plate_id) for plate_id in df[plate_id_header]]
-        df[well_header] = [plate_id.split("_")[1] for plate_id in df[plate_id_header]]
-        seq_df = pd.DataFrame()
-        seq_df["File Name"] = ["{}_{}_{}{}".format(current_date, unique_id, polarity, suffix) for unique_id in
-                               df[unique_id_header]]
+        seq_df = DataFrame()
+        seq_df["File Name"] = [f"{base_filename}_{polarity}" for base_filename in metadata_df[base_filename_header]]
         #
-        seq_df["Path"] = r"C:\Xcalibur\data\Corinna_Brungs\{}\{}_{}{}".format(lib_id, current_date, polarity, suffix)
+        seq_df["Path"] = f"{data_filepath}_{polarity}"
         seq_df["Instrument Method"] = instrument_method
-        seq_df["Position"] = ["{}:{}".format(plate_location, well) for well in df[well_header]]
-        seq_df["Inj Vol"] = 3
+        seq_df["Position"] = ["{}:{}".format(plate_location, well) for well in metadata_df[well_header]]
+
+        seq_df["Inj Vol"] = inject_volume_mul
         seq_df["Dil Factor"] = 1
         seq_df = seq_df.drop_duplicates()
 
-        filtered_df = seq_df[seq_df["File Name"].str.contains(filter_plate)]
-        csv_file = "data/Sequence/{}_seq_rack_{}_{}_{}_{}{}.csv".format(current_date, plate_location, lib_id,
-                                                                        filter_plate, polarity, add)
-        write_thermo_sequence(csv_file, filtered_df)
-        dataframes.append(filtered_df)
+        csv_file = f"{sequence_file}_{polarity}.csv"
+        write_thermo_sequence(csv_file, seq_df)
+        dataframes.append(seq_df)
     return pd.concat(dataframes)
 
 
-def write_thermo_sequence(csv_file, df: pd.DataFrame):
+def load_metadata_df(metadata_file, well_header, unique_id_header, method_suffix) -> DataFrame:
+    logging.info("Will run on %s", metadata_file)
+    # import df
+    if metadata_file.endswith(".tsv"):
+        df = pd.read_csv(metadata_file, sep="\t")
+    else:
+        df = pd.read_csv(metadata_file, sep=",")
+
+    if well_header not in df.columns:
+        raise ValueError(f"No column named {well_header} with the well number, e.g., A1")
+    if unique_id_header not in df.columns:
+        raise ValueError(
+            f"No column named {unique_id_header} with unique sample ids. Run metadata clean up that generates a unique id, e.g., lib_plate1_A1_id (note the _id at the end and the prefix that make sure that wells like A1 do not match to A10)")
+
+    current_date = date.today().strftime("%Y%m%d")
+    df[base_filename_header] = ["{}_{}_{}".format(current_date, unique_id, method_suffix) for unique_id in
+                                df[unique_id_header]]
+    return df
+
+
+def filter_metadata_by_plate_id(metadata_df: DataFrame, plate_id: str, plate_id_header: str) -> DataFrame:
+    """
+    Filter metadata_df to only contain entries for the current plate_id
+    DONT apply filter if plate_id is empty - instead use full metadata_df
+    :param metadata_df:
+    :param plate_id:
+    :param plate_id_header:
+    :return:
+    """
+    if plate_id:
+        if plate_id_header not in metadata_df.columns:
+            raise ValueError(
+                f"Plate id filter was {plate_id} but there was no column in the metadata file for the plates. Name: {plate_id_header}")
+        else:
+            plate_df = metadata_df[metadata_df[plate_id_header].astype(str) == plate_id]
+    else:
+        plate_df = metadata_df
+    return plate_df
+
+
+def write_thermo_sequence(csv_file, df: DataFrame):
     df.to_csv(csv_file, index=False)
     # df.to_csv("data/nih/{}_uniqueID.csv".format(lib_id), index=False)
     # Adding the first line as needed by Xcalibur sequence
@@ -108,6 +151,13 @@ def write_thermo_sequence(csv_file, df: pd.DataFrame):
     with open(csv_file, 'w') as modified:
         modified.write("Bracket Type=4,\n" + data)
 
+    logging.info(f"Saved new sequence to: {csv_file}")
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except:
+        logging.exception("Could not create sequence")
+        exit(1)
+    exit(0)
