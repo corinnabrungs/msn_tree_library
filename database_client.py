@@ -14,7 +14,7 @@ from joblib import Memory
 memory = Memory("memcache")
 
 # openfda by name (uppercase)
-OPENFDA_URL = r"https://api.fda.gov/other/substance.json?search=names.name:%22{}%22"
+OPENFDA_URL = r"https://api.fda.gov/drug/substance.json?search=openfda.unii:'{}'"
 
 # opfenfda by unii
 OPENFDA_UNII_URL = r"https://api.fda.gov/other/substance.json?search=unii:{}"
@@ -23,9 +23,6 @@ OPENFDA_UNII_URL = r"https://api.fda.gov/other/substance.json?search=unii:{}"
 # openfda by cas
 # r"https://api.fda.gov/other/substance.json?search=codes.code:"{}""
 
-
-# drugcentral
-DRUGCENTRAL_URL = r"https://pharos-api.newdrugtargets.org/drugcentral?name={}%20"
 
 logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 
@@ -142,7 +139,7 @@ def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
             return []
     except:
         if try_n < max_tries:
-            return pubchem_get_synonyms(compound, try_n=try_n + 1, max_tries=max_tries)
+            return _pubchem_get_synonyms(compound, try_n=try_n + 1, max_tries=max_tries)
         else:
             logging.exception("Failed to retrieve synonyms for compound {}".format(compound.cid))
             return []
@@ -180,13 +177,6 @@ def get_openfda_information(name):
 
 def get_openfda_unii_information(unii):
     url = OPENFDA_UNII_URL.format(unii)
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()
-
-
-def get_drugcentral_information(name):
-    url = DRUGCENTRAL_URL.format(name)
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
