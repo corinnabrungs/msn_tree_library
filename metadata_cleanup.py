@@ -249,7 +249,7 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
     except:
         pass
 
-    # get PubChem information based on inchikey, smiles, and Inchi
+    # get PubChem information based on inchikey, smiles, Inchi
     if pubchem_search:
         logging.info("Search PubChem by structure")
         df = pubchem_search_by_structure(df)
@@ -296,7 +296,7 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
 
     # Converting numbers back to phase X, launched or preclinic
     df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
-                                                   df["clinical_phase"]]
+                                        df["clinical_phase"]]
     # drop mol
     df = df.drop(columns=['mol', 'pubchem'])
     df["none"] = df.isnull().sum(axis=1)
@@ -306,7 +306,10 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
     except:
         pass
     # adding unique name
-    df["lib_plate_well_unique"] = df["lib_plate_well"] + "."
+    try:
+        df["lib_plate_well_unique"] = df["lib_plate_well"] + "_"
+    except:
+        pass
     # export metadata file
     logging.info("Exporting to file %s", out_file)
     if metadata_file.endswith(".tsv"):
@@ -462,15 +465,16 @@ def chembl_search(df) -> pd.DataFrame:
         [compound["first_approval"] if pd.notnull(compound) else np.NAN for compound in compounds],
         dtype=pd.Int64Dtype())
     df["withdrawn"] = [compound["withdrawn_flag"] if pd.notnull(compound) else np.NAN for compound in compounds]
-    df["withdrawn_class"] = [compound["withdrawn_class"] if pd.notnull(compound) else np.NAN for compound in
-                             compounds]
-    df["withdrawn_reason"] = [compound["withdrawn_reason"] if pd.notnull(compound) else np.NAN for compound in
-                              compounds]
-    df["withdrawn_year"] = pd.array(
-        [compound["withdrawn_year"] if pd.notnull(compound) else np.NAN for compound in compounds],
-        dtype=pd.Int64Dtype())
-    df["withdrawn_country"] = [compound["withdrawn_country"] if pd.notnull(compound) else np.NAN for compound in
-                               compounds]
+    # was changed by ChEMBL api
+    # df["withdrawn_class"] = [compound["withdrawn_class"] if pd.notnull(compound) else np.NAN for compound in
+    #                          compounds]
+    # df["withdrawn_reason"] = [compound["withdrawn_reason"] if pd.notnull(compound) else np.NAN for compound in
+    #                           compounds]
+    # df["withdrawn_year"] = pd.array(
+    #     [compound["withdrawn_year"] if pd.notnull(compound) else np.NAN for compound in compounds],
+    #     dtype=pd.Int64Dtype())
+    # df["withdrawn_country"] = [compound["withdrawn_country"] if pd.notnull(compound) else np.NAN for compound in
+    #                            compounds]
     df["oral"] = [compound["oral"] if pd.notnull(compound) else np.NAN for compound in compounds]
     df["parenteral"] = [compound["parenteral"] if pd.notnull(compound) else np.NAN for compound in compounds]
     df["topical"] = [compound["topical"] if pd.notnull(compound) else np.NAN for compound in compounds]
@@ -542,8 +546,9 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    # cleanup_file(r"data\test_metadata.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-    #              query_drugcentral=True)
+    cleanup_file(r"data/library/test_metadata.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"],
+                 query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
+                 query_drugcentral=True)
     # cleanup_file("data\mce_library.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
     # cleanup_file("data\gnpslib\gnps_library_small.csv", id_columns=['gnps_libid', "inchi_key"], query_pubchem=True,
@@ -552,6 +557,5 @@ if __name__ == "__main__":
     #              query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
     # cleanup_file("data\mce_library_add_compounds.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
-    cleanup_file("data\\final_tables\mce_library_empty.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-                     query_drugcentral=True)
-
+    # cleanup_file(r"data/nih/nih_library_test.tsv", id_columns=['Product Name', 'lib_plate_well', "Smiles"], query_pubchem=True,  pubchem_search=True, query_broad_list=True, query_drugbank_list=True,
+    #                  query_drugcentral=True)
