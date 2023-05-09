@@ -7,7 +7,17 @@ class TestDatabases(TestCase):
 
     def test_chembl_id(self):
         from chembl_webresource_client.new_client import new_client as chembl
-        comp = chembl.molecule.get('CHEMBL408982')
+        comp = chembl.molecule.get('CHEMBL461522')
+        assert comp
+
+    def test_chembl_otc_drug(self):
+        from chembl_webresource_client.new_client import new_client as chembl
+        comp = chembl.molecule.get('CHEMBL112')
+        assert comp
+
+    def test_chembl_prescription_drug(self):
+        from chembl_webresource_client.new_client import new_client as chembl
+        comp = chembl.molecule.get('CHEMBL70')
         assert comp
 
     def test_get_chembl_mol(self):
@@ -65,7 +75,7 @@ KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
         assert comp
 
     def test_get_openfda_information(self):
-        comp = database_client.get_openfda_information(r"FOSTEMSAVIR")
+        comp = database_client.get_openfda_information(r"97IQ273H4L")
         assert comp
 
     def test_get_drugcentral_information(self):
@@ -99,11 +109,33 @@ KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
         print("new chance: this should be chached now \n\n\n\n")
         search_pubchem(inchikeys)
 
+    def test_pubchem_to_df(self):
+        inchikeys = """BGVLELSCIHASRV-QPEQYQDCSA-N
+SWMDAPWAQQTBOG-UHFFFAOYSA-N
+PZUSGRHVYDQLHR-UHFFFAOYSA-N
+KPFZCKDPBMGECB-WGDLNXRISA-N
+RYFZBPVMVYTEKZ-KBPBESRZSA-N
+JEGHXKRHKHPBJD-UHFFFAOYSA-N
+PCMHOSYCWRRHTG-UHFFFAOYSA-N
+KFRKRECSIYXARE-HMAPJEAMSA-N
+LHSBZAWDPSTOEY-UHFFFAOYSA-N
+CYVVJSKZRBZHAV-UNZYHPAISA-N
+ZGBAJMQHJDFTQJ-DEOSSOPVSA-N
+IZAOBRWCUGOKNH-OAHLLOKOSA-N
+HPHUVLMMVZITSG-UHFFFAOYSA-N
+RDJGLLICXDHJDY-UHFFFAOYSA-N
+RCYPVQCPYKNSTG-UHFFFAOYSA-N
+SSZHESNDOMBSRV-UHFFFAOYSA-N
+HRDQQHUKUIKFHT-UHFFFAOYSA-N
+XGOYIMQSIKSOBS-UHFFFAOYSA-N
+JNUGFGAVPBYSHF-UHFFFAOYSA-N
+XDLYKKIQACFMJG-WKILWMFISA-N
+KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
+        import pubchempy
+        df = pubchempy.get_compounds(inchikeys, "inchikey", as_dataframe=True)
 
 
 def search_pubchem(inchikeys):
     for inchikey in inchikeys:
         comp = database_client.search_pubchem_by_structure(inchikey=inchikey)
         # print(comp)
-
-
