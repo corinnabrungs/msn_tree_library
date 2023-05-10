@@ -19,6 +19,9 @@ from tqdm import tqdm
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
+# CONSTANTS
+unique_sample_id_header = "unique_sample_id"
+
 
 def add_suffix(filename, suffix):
     p = Path(filename)
@@ -93,6 +96,7 @@ def get_clinical_phase_description(number):
             return "Launched"
         case _:
             return number
+
 
 def map_drugbank_approval(status):
     match (str(status)):
@@ -218,7 +222,8 @@ def drugcentral_search(df):
         drugcentral_query.deconnect()
 
 
-def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem: bool = True,
+def cleanup_file(metadata_file, lib_id, id_columns=['Product Name', 'lib_plate_well', "inchi_key"],
+                 plate_id_header="plate_id", well_header="well_location", query_pubchem: bool = True,
                  calc_identifiers: bool = True, pubchem_search: bool = True,
                  query_chembl: bool = True, query_broad_list=False, query_drugbank_list=False, query_drugcentral=False):
     logging.info("Will run on %s", metadata_file)
@@ -232,6 +237,9 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
 
     ensure_synonyms_column(df)
 
+    # creat unique_id
+    create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
+
     # Query pubchem by name and CAS
     if query_pubchem:
         logging.info("Search PubChem by name")
@@ -242,7 +250,7 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
     if calc_identifiers:
         logging.info("RDkit - predict properties")
         add_molid_columns(df)
-        add_molid_columns(df) ## second time for removing salts, especially adducts previous [Na], now .Na
+        add_molid_columns(df)  ## second time for removing salts, especially adducts previous [Na], now .Na
     # drop duplicates
     try:
         df = df.drop_duplicates(id_columns, keep="first").sort_index()
@@ -302,20 +310,38 @@ def cleanup_file(metadata_file, id_columns=['Product Name', 'lib_plate_well', "i
     df["none"] = df.isnull().sum(axis=1)
     try:
         df = df.sort_values(by="none", ascending=True).drop_duplicates(
-            ["Product Name", "lib_plate_well", "exact_mass"], keep="first").sort_index()
+            ["Product Name", unique_id_header, "exact_mass"], keep="first").sort_index()
     except:
         pass
-    # adding unique name
-    try:
-        df["lib_plate_well_unique"] = df["lib_plate_well"] + "_"
-    except:
-        pass
+
     # export metadata file
     logging.info("Exporting to file %s", out_file)
     if metadata_file.endswith(".tsv"):
         df.to_csv(out_file, sep="\t", index=False)
     else:
         df.to_csv(out_file, sep=",", index=False)
+
+
+def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
+    """
+    generates a column with unique sample IDs if column with well locations and plate IDs (optional) is available.
+    :param df: metadata
+    :param lib_id: library id that defines the compound library
+    :param plate_id_header: number or name of the plate
+    :param well_header: well location of the injection
+    :return: lib_id_plate_well_id
+    """
+    try:
+        if well_header in df.columns:
+            if plate_id_header in df.columns:
+                df[unique_sample_id_header] = ["{}_{}_{}_id".format(lib_id, plate, well) for plate, well in
+                                               zip(df[plate_id_header], df[well_header])]
+            else:
+                df[unique_sample_id_header] = ["{}_{}_id".format(lib_id, well) for well in df[well_header]]
+    except:
+        logging.info(
+            "No well location and plate id found to construct unique ID which is needed for library generation")
+        pass
 
 
 def get_rdkit_mol(smiles, inchi):
@@ -546,7 +572,8 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data/library/test_metadata.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"],
+    cleanup_file(r"data/library/test_metadata.tsv", lib_id="pluskal_nih",
+                 id_columns=['Product Name', 'lib_plate_well', "inchi_key"],
                  query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
                  query_drugcentral=True)
     # cleanup_file("data\mce_library.tsv", id_columns=['Product Name', 'lib_plate_well', "inchi_key"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
