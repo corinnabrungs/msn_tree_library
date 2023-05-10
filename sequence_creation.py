@@ -13,7 +13,7 @@ base_filename_header = "base_filename"
 
 def main():
     metadata_file = r"data/nih/nih_library_new_headers.tsv"
-    data_filepath = r"C:\Xcalibur\data\Corinna_Brungs"
+    data_filepath = r"C:\Xcalibur\data\Corinna_Brungs"  # storage path for the acquired data
 
     # define all variables
     inject_volume_mul = 3
@@ -41,8 +41,8 @@ def create_orbitrap_sequence(metadata_file, data_filepath: str, instrument_metho
     Creates sequences for orbitrap instruments
     :param metadata_file: the metadata file that contains the well_location, plate_id, and unique_sample_id columns
     :param data_filepath: path to store acquired data to
-    :param instrument_method_positive: positive mode method - or None to skip
-    :param instrument_method_negative: negative mode method - or None to skip
+    :param instrument_method_positive: positive mode method and path - or None to skip
+    :param instrument_method_negative: negative mode method and path - or None to skip
     :param lib_id: defines the compound library
     :param method_suffix: defines the method, e.g., MSn, IT, HCD, ...
     :param plates_in_autosampler_location: list of tuples plate_id, location as tuples ("15", "B"),
@@ -78,7 +78,8 @@ def _create_orbitrap_sequence(metadata_df: DataFrame, sequence_file, data_filepa
     """
     Creates Orbitrap sequence for positive and negative mode
 
-    :param data_filepath: data acquisition file path. polarity will be added
+    :param data_filepath: data acquisition file path. polarity will be added, path needs to be available before acquisition
+            (date_suffix_polarity)
     :param sequence_file: the base sequence file to export. polarity and file type csv will be added automatically
     :param metadata_df: a dataframe that is already filtered to only contain samples from a single plate
     :param well_header: getting the well number of the final plate, e.g., A1
