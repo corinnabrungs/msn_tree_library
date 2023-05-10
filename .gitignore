@@ -1,3 +1,8 @@
 /data/*
 /figures/*
 /.idea/
+/.run/
+/library/
+/memcache/
+/tmpcache/
+/venv/
