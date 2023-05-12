@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import chemfont_postgresql_query as chemfont_query
+import pandas_utils
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
@@ -42,7 +43,7 @@ def chemfont_search(df):
 
 def chemfont_file(metadata_file):
     logging.info("Will run on %s", metadata_file)
-    out_file = cleanup.add_suffix(metadata_file, "chemfont")
+    out_file = pandas_utils.add_filename_suffix(metadata_file, "chemfont")
 
     if metadata_file.endswith(".tsv"):
         df = pd.read_csv(metadata_file, sep="\t")

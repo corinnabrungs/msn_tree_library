@@ -90,7 +90,7 @@ def extraction_file(hmdb_file):
                      "cas": from_xml_node(node, "cas-number"),
                      "unii": from_xml_node(node, "unii"),
                      "smiles": smiles,
-                     "inchi_key": inchikey,
+                     "inchikey": inchikey,
                      "type": from_xml_attribute(node, "type"),
                      "description": from_xml_node(node, "description"),
                      "approved": from_xml_node(groups_node, "group"),
@@ -112,10 +112,10 @@ def extraction_file(hmdb_file):
     db_df = pd.DataFrame(rows)
 
     # export metadata file
-    db_df.to_csv("data/hmdb.tsv", sep="\t", index=False)
+    db_df.to_csv("data/hmdb_test.tsv", sep="\t", index=False)
 
 
 if __name__ == "__main__":
-    extraction_file(r"data\hmdb_metabolites.xml")
+    extraction_file(r"data\hmdb_test.xml")
 
 # download from: https://go.drugbank.com/releases/latest, approved access needed,

@@ -99,8 +99,8 @@ def chemfont_for_row(row):
         if row is None:
             raise ValueError("Row needs to be defined")
 
-        if "Product Name" in row:
-            logging.info("Running row {}".format(row["Product Name"]))
+        if "product_name" in row:
+            logging.info("Running row {}".format(row["product_name"]))
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)
@@ -143,10 +143,10 @@ def chemfont_postgresql(inchikey=None, split_inchikey=None):
 
         with conn.cursor() as cur:
             if inchikey:
-                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["inchi_key"].format(inchikey)))
+                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey)))
                 structure = cur.fetchone()
             if not structure and split_inchikey:
-                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["split_inchi_key"].format(split_inchikey)))
+                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["split_inchikey"].format(split_inchikey)))
                 structure = cur.fetchone()
             if not structure:
                 logging.info(
