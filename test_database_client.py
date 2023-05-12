@@ -1,6 +1,7 @@
 from unittest import TestCase
 
-import database_client
+import chembl_client
+import pubchem_client
 
 
 class TestDatabases(TestCase):
@@ -21,13 +22,13 @@ class TestDatabases(TestCase):
         assert comp
 
     def test_get_chembl_mol(self):
-        comp = database_client.get_chembl_mol(inchi_key="BGVLELSCIHASRV-QPEQYQDCSA-N")
+        comp = chembl_client.get_chembl_mol(inchikey="BGVLELSCIHASRV-QPEQYQDCSA-N")
         assert comp
         assert comp["max_phase"] == 4
         assert comp["molecule_chembl_id"] == 'CHEMBL3301594'
 
     def test_get_chembl_mol_by_wrong_inchikey(self):
-        comp = database_client.get_chembl_mol(inchi_key="coco")
+        comp = chembl_client.get_chembl_mol(inchikey="coco")
         assert not comp
 
     def test_inchikey_list(self):
@@ -53,33 +54,21 @@ JNUGFGAVPBYSHF-UHFFFAOYSA-N
 XDLYKKIQACFMJG-WKILWMFISA-N
 KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
         for inchikey in inchikeys:
-            comp = database_client.get_chembl_mol(inchikey)
+            comp = chembl_client.get_chembl_mol(inchikey)
             assert comp
             assert comp["molecule_structures"]["standard_inchi_key"] == inchikey
 
 
     def test_get_chembl_mol_by(self):
-        comp = database_client.get_chembl_mol(inchi_key="LVWZTYCIRDMTEY-UHFFFAOYSA-N")
+        comp = chembl_client.get_chembl_mol(inchikey="LVWZTYCIRDMTEY-UHFFFAOYSA-N")
         assert comp
 
     def test_search_pubchem_by_name(self):
-        comp = database_client.search_pubchem_by_name("BGVLELSCIHASRV-QPEQYQDCSA-N")
+        comp = pubchem_client.search_pubchem_by_name("BGVLELSCIHASRV-QPEQYQDCSA-N")
         assert comp
 
     def test_search_pubchem_by_structure(self):
-        comp = database_client.search_pubchem_by_structure(inchikey="BGVLELSCIHASRV-QPEQYQDCSA-N")
-        assert comp
-
-    def test_get_openfda_unii_information(self):
-        comp = database_client.get_openfda_unii_information(r"97IQ273H4L")
-        assert comp
-
-    def test_get_openfda_information(self):
-        comp = database_client.get_openfda_information(r"97IQ273H4L")
-        assert comp
-
-    def test_get_drugcentral_information(self):
-        comp = database_client.get_drugcentral_information(r"remdesivir")
+        comp = pubchem_client.search_pubchem_by_structure(inchikey="BGVLELSCIHASRV-QPEQYQDCSA-N")
         assert comp
 
 
@@ -137,5 +126,5 @@ KFRKRECSIYXARE-HYARGMPZSA-N""".split("\n")
 
 def search_pubchem(inchikeys):
     for inchikey in inchikeys:
-        comp = database_client.search_pubchem_by_structure(inchikey=inchikey)
+        comp = pubchem_client.search_pubchem_by_structure(inchikey=inchikey)
         # print(comp)
