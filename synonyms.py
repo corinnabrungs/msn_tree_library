@@ -10,7 +10,7 @@ from pubchem_client import pubchem_get_synonyms
 
 
 def ensure_synonyms_column(df: pd.DataFrame) -> pd.DataFrame:
-    df["synonyms"] = df.apply(lambda row: get_all_synonyms(row), axis=1).astype(dtype=object)
+    df["synonyms"] = df.apply(lambda row: get_all_synonyms(row), axis=1)
     return df
 
 
