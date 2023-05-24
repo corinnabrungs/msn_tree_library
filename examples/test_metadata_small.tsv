@@ -1,0 +1,4 @@
+compound_name	synonyms	cas	target	formula	smiles	well_location	plate_id
+TG003		719277-26-6	CDK	C13H15NO2S	CC(/C=C1SC2=CC=C(C=C2N\1CC)OC)=O.[Z]	A1	1
+Fostemsavir Tris	BMS-663068 (Tris)	864953-39-9	HIV	C29H37N8O11P	O=C(N1CCN(C(C2=CC=CC=C2)=O)CC1)C(C3=CN(COP(O)(O)=O)C4=C3C(OC)=CN=C4N5N=C(C)N=C5)=O.OCC(CO)(N)CO	A1	1
+NQO1 substrate		2304503-05-5	Others	C13H2F2N4O	N#CC1=C(C#N)N=C2C(C(C3=C2C=C(F)C(F)=C3)=O)=N1	A1	1
