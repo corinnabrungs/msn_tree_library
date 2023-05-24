@@ -9,13 +9,16 @@ from pubchempy import Compound, get_compounds
 
 from synonyms import get_first_synonym
 from pandas_utils import notnull, isnull
+from tqdm import tqdm
+
+tqdm.pandas()
 
 logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 
 memory = Memory("memcache")
 
 
-def pubchem_search_by_names(row):
+def pubchem_search_by_cid(row):
     if notnull(row["pubchem"]):
         return row["pubchem"]
 
@@ -24,6 +27,15 @@ def pubchem_search_by_names(row):
         compound = pubchem_by_cid(row["pubchem_cid_parent"])
     if isnull(compound) and "pubchem_cid" in row:
         compound = pubchem_by_cid(row["pubchem_cid"])
+
+    return compound
+
+
+def pubchem_search_by_names(row) -> str | None:
+    if notnull(row["pubchem"]):
+        return row["pubchem"]
+
+    compound = pubchem_search_by_cid(row)
     if isnull(compound) and "compound_name" in row and notnull(row["compound_name"]):
         compound = search_pubchem_by_name(str(row["compound_name"]))
     if isnull(compound) and "cas" in row and notnull(row["cas"]):
@@ -89,6 +101,8 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
 
 def pubchem_search_by_structure(df) -> pd.DataFrame:
     logging.info("Search PubChem by structure")
+    df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
+
     df["pubchem"] = [search_pubchem_by_structure(smiles, inchi, inchikey) if isnull(compound) else compound for
                      compound, inchikey, smiles, inchi in
                      zip(df["pubchem"], df["inchikey"], df["smiles"], df["inchi"])]
