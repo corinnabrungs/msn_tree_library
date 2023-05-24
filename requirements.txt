@@ -10,5 +10,6 @@ rdkit
 tqdm
 pubchempy
 pyteomics
+pyarrow
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
