@@ -11,5 +11,6 @@ tqdm
 pubchempy
 pyteomics
 pyarrow
+StrEnum # remove in python 3.11
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
