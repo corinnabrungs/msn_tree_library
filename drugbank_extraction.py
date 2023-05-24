@@ -86,14 +86,14 @@ def extraction_file(drugbank_file):
 
 
         rows.append({"drugbank_id": from_xml_node(node, "drugbank-id"),
-                     "name": from_xml_node(node, "name"),
+                     "compound_name": from_xml_node(node, "name"),
                      "chembl_id": next(filter(lambda d: str(d).startswith("CHEMBL"), external), None),
                      # currently we only extract pubchem and chembl, that's why this works (excluding chembl, only shows pubchem)
                      "pubchem_cid": next(filter(lambda d: not str(d).startswith("CHEMBL"), external), None),
                      "cas": from_xml_node(node, "cas-number"),
                      "unii": from_xml_node(node, "unii"),
                      "smiles": smiles,
-                     "inchi_key": inchikey,
+                     "inchikey": inchikey,
                      "type": from_xml_attribute(node, "type"),
                      "description": from_xml_node(node, "description"),
                      "approved": from_xml_node(groups_node, "group"),
