@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import drugcentral_postgresql_query as drugcentral_query
+from rdkit_mol_identifiers import split_inchikey
 
 tqdm.pandas()
 
@@ -11,8 +12,7 @@ def drugcentral_search(df):
     logging.info("Search drugcentral by external identifier or inchikey")
     prefix = "drugcentral_"
     if "split_inchikey" not in df and "inchikey" in df:
-        df["split_inchikey"] = [str(inchikey).split("-")[0] if pd.notnull(inchikey) else None for inchikey in
-                                df['inchikey']]
+        df["split_inchikey"] = [split_inchikey(inchikey) for inchikey in df['inchikey']]
     try:
         drugcentral_query.connect()
         logging.info("Searching in DrugCentral")
