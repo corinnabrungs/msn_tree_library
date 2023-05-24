@@ -1,6 +1,6 @@
 import pandas as pd
 import logging
-from metadata_cleanup import map_clinical_phase_to_number
+from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
 
 tqdm.pandas()
