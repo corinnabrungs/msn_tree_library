@@ -31,9 +31,27 @@ def read_dataframe(file):
     return df
 
 
-def add_filename_suffix(filename, suffix):
+def add_filename_suffix(filename, suffix, format_override=None):
+    """
+
+    :param filename: original file
+    :param suffix: is added to the filename
+    :param format_override: None will use the original file suffix and otherwise specify changed suffix
+    :return: filename_suffix.format
+    """
     p = Path(filename)
-    return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, p.suffix)
+    file_format = p.suffix if format_override is None else format_override
+    return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, file_format)
+
+
+def combine_dfs_fill_missing_values(target: pd.DataFrame, source: pd.DataFrame) -> pd.DataFrame:
+    """
+    Only missing values are replaced. Column names need to match between the target and source
+    :param target: has priority. only missing values are filled
+    :param source: source to fill values
+    :return: the filled dataframe
+    """
+    return target.combine_first(source)  # alternative df.combine_first
 
 
 def get_or_else(row, key, default=None):

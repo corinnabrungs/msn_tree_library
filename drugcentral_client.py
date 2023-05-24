@@ -1,6 +1,10 @@
 import logging
 import pandas as pd
+from tqdm import tqdm
+
 import drugcentral_postgresql_query as drugcentral_query
+
+tqdm.pandas()
 
 
 def drugcentral_search(df):

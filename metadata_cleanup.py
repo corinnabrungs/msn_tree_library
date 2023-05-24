@@ -2,6 +2,7 @@ import logging
 
 from tqdm import tqdm
 
+import unichem_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drugbank_client import drugbank_search_add_columns
@@ -56,14 +57,6 @@ def get_clinical_phase_description(number):
             return number
 
 
-def map_drugbank_approval(status):
-    match (str(status)):
-        case "approved" | "withdrawn":
-            return 4
-        case _:
-            return None
-
-
 def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
     """
     generates a column with unique sample IDs if column with well locations and plate IDs (optional) is available.
@@ -87,7 +80,7 @@ def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
 
 
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
-                 query_pubchem_by_name: bool = True, calc_identifiers: bool = True,
+                 query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
                  query_drugbank_list: bool = False, query_drugcentral: bool = False):
@@ -113,6 +106,12 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
 
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
     df = drop_duplicates_by_structure_rowid(df)
+
+    # add new columns for cross references to other databases
+    if query_unichem:
+        unichem_df = unichem_client.search_all_xrefs(df)
+        unichem_client.save_unichem_df(metadata_file, unichem_df)
+        df = unichem_client.extract_ids_to_columns(unichem_df, df)
 
     if query_pubchem_by_structure:
         df = pubchem_search_by_structure(df)
@@ -145,12 +144,13 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     except:
         pass
 
+    # GNPS cached version
     if query_npclassifier:
         df = apply_np_classifier(df)
 
-    # GNPS cached version is down
-    # if query_classyfire:
-    #     df = apply_classyfire(df)
+    # GNPS cached version
+    if query_classyfire:
+        df = apply_classyfire(df)
 
     # export metadata file
     logging.info("Exporting to file %s", out_file)

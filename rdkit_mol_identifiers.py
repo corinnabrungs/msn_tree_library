@@ -8,6 +8,8 @@ from rdkit.Chem.MolStandardize import rdMolStandardize
 
 from chembl_structure_pipeline import standardizer
 
+from pandas_utils import notnull, isnull
+
 
 # returns canonical smiles
 def mol_to_canon_smiles(mol):
@@ -70,6 +72,10 @@ def split_smiles_major_mol(smiles):
         return max(split_smiles, key=len)
     else:
         return split_smiles[0]
+
+
+def split_inchikey(inchikey):
+    return str(inchikey).split("-")[0] if notnull(inchikey) else None
 
 
 def exact_mass_from_mol(mol):

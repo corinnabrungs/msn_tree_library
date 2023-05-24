@@ -3,6 +3,7 @@ import re
 
 import pandas as pd
 
+import pandas_utils
 from pandas_utils import get_or_else, get_unique_list
 from pubchem_client import pubchem_get_synonyms
 
@@ -84,10 +85,11 @@ def cleanup_drugbank_id(input):
 
 
 def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
-    df["unii"] = [find_unii(synonyms) for synonyms in df["synonyms"]]
-    df["schembl_id"] = [find_schembl(synonyms) for synonyms in df["synonyms"]]
-    df["chembl_id"] = [find_chembl_id(synonyms) for synonyms in df["synonyms"]]
-    df["zinc_id"] = [find_zinc(synonyms) for synonyms in df["synonyms"]]
-    df["drugbank_id"] = [find_drugbank(synonyms) for synonyms in df["synonyms"]]
+    source = pd.DataFrame()
+    source["unii"] = [find_unii(synonyms) for synonyms in df["synonyms"]]
+    source["schembl_id"] = [find_schembl(synonyms) for synonyms in df["synonyms"]]
+    source["chembl_id"] = [find_chembl_id(synonyms) for synonyms in df["synonyms"]]
+    source["zinc_id"] = [find_zinc(synonyms) for synonyms in df["synonyms"]]
+    source["drugbank_id"] = [find_drugbank(synonyms) for synonyms in df["synonyms"]]
 
-    return df
+    return pandas_utils.combine_dfs_fill_missing_values(df, source)
