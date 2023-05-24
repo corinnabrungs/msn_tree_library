@@ -7,7 +7,6 @@ import pubchempy
 from joblib import Memory
 from pubchempy import Compound, get_compounds
 
-from synonyms import get_first_synonym
 from pandas_utils import notnull, isnull
 from tqdm import tqdm
 
@@ -50,6 +49,8 @@ def pubchem_search_by_names(row) -> str | None:
 
 
 def pubchem_search_structure_by_name(df) -> pd.DataFrame:
+    from synonyms import get_first_synonym
+
     logging.info("Search PubChem by name")
     df["pubchem"] = None
     df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_names(row), axis=1)
@@ -100,6 +101,8 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
 
 
 def pubchem_search_by_structure(df) -> pd.DataFrame:
+    from synonyms import get_first_synonym
+
     logging.info("Search PubChem by structure")
     df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
 

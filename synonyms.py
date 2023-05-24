@@ -1,31 +1,35 @@
 import logging
 import re
+import ast
 
 import pandas as pd
 
 import pandas_utils
-from pandas_utils import get_or_else, get_unique_list
+from pandas_utils import get_or_else, get_unique_list, notnull
 from pubchem_client import pubchem_get_synonyms
 
 
 def ensure_synonyms_column(df: pd.DataFrame) -> pd.DataFrame:
-    df["synonyms"] = df.apply(lambda row: get_all_synonyms(row), axis=1)
+    df["synonyms"] = df.apply(lambda row: get_all_synonyms(row), axis=1).astype(dtype=object)
     return df
 
 
 def get_all_synonyms(row):
     synonyms = [
-        get_or_else(row, "product_name"),
         get_or_else(row, "cas"),
         get_or_else(row, "compound_name"),
-        get_or_else(row, "input_compound_name"),
+        get_or_else(row, "input_name"),
     ]
 
     old = row["synonyms"] if "synonyms" in row else None
     try:
         if isinstance(old, str):
-            synonyms.append(old)
-        elif old is not None:
+            try:
+                list_from_str = ast.literal_eval(old)
+                synonyms += list_from_str
+            except:
+                synonyms.append(old)
+        elif notnull(old):
             synonyms = synonyms + old
     except:
         logging.exception("Cannot concat synonyms")

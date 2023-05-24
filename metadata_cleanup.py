@@ -8,6 +8,7 @@ from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
+from meta_constants import MetaColumns
 from pandas_utils import read_dataframe, add_filename_suffix
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
@@ -57,7 +58,11 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
     df["row_id"] = df.reset_index().index
 
-    ensure_synonyms_column(df)
+    # ensure compound_name is saved to input_name if this is not defined yet
+    if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
+        df[MetaColumns.input_name] = df[MetaColumns.compound_name]
+
+    df = ensure_synonyms_column(df)
 
     # Query pubchem by name and CAS
     if query_pubchem_by_name:
@@ -134,7 +139,7 @@ def drop_duplicates_by_structure_rowid(df):
 
 
 if __name__ == "__main__":
-    cleanup_file(r"data/library/test_metadata.tsv", lib_id="pluskal_nih",
+    cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test",
                  query_pubchem_by_name=True,
                  # need local files
                  query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)

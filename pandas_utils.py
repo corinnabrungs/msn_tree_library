@@ -1,10 +1,27 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 
 def isnull(o):
-    return str(o) == '<NA>' or o == "N/A" or o == "NA" or o == None or pd.isnull(o)
+    try:
+        if o is None:
+            return True
+
+        so = str(o).lower()
+        if so == '<na>' or so == "n/a" or so == "na" or so == "nan":
+            return True
+
+        result = pd.isnull(o)
+        if isinstance(result, bool):
+            return result
+
+        # otherwise we are looking at a series or list which is not None
+        return False
+    except:
+        return False
 
 
 def notnull(o):
