@@ -41,9 +41,6 @@ def pubchem_search_by_names(row) -> str | None:
         compound = search_pubchem_by_name(row["cas"])
     if isnull(compound) and "product_name" in row:
         compound = search_pubchem_by_name(row["product_name"])
-    # only one compound was found as CAS-
-    if isnull(compound) and "cas" in row:
-        compound = search_pubchem_by_name("CAS-{}".format(row["product_name"]))
 
     return compound
 
@@ -55,22 +52,23 @@ def pubchem_search_structure_by_name(df) -> pd.DataFrame:
     df["pubchem"] = None
     df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_names(row), axis=1)
 
-    df["pubchem_cid"] = pd.array([compound.cid if pd.notnull(compound) else np.NAN for compound in df["pubchem"]],
+    df["pubchem_cid"] = pd.array([compound.cid if notnull(compound) else np.NAN for compound in df["pubchem"]],
                                  dtype=pd.Int64Dtype())
-    df["isomerical_smiles"] = [compound.isomeric_smiles if pd.notnull(compound) else np.NAN for compound in
+    df["isomerical_smiles"] = [compound.isomeric_smiles if notnull(compound) else np.NAN for compound in
                                df["pubchem"]]
-    df["canonical_smiles"] = [compound.canonical_smiles if pd.notnull(compound) else np.NAN for compound in
+    df["canonical_smiles"] = [compound.canonical_smiles if notnull(compound) else np.NAN for compound in
                               df["pubchem"]]
 
     df["pubchem_cid_parent"] = df["pubchem_cid"]
     df["compound_name"] = [get_first_synonym(compound) for compound in df["pubchem"]]
-    df["iupac"] = [compound.iupac_name if pd.notnull(compound) else np.NAN for compound in df["pubchem"]]
+    df["iupac"] = [compound.iupac_name if notnull(compound) else np.NAN for compound in df["pubchem"]]
     try:
-        df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if pd.notnull(compound) else [] for compound
-                                           in df["pubchem"]]
+        pc_synonyms = [pubchem_get_synonyms(compound) if notnull(compound) else [] for compound in df["pubchem"]]
+        df["synonyms"] = [[] if isnull(synonyms) else synonyms for synonyms in df["synonyms"]]
+        df["synonyms"] = [a + b for a, b in zip(pc_synonyms, df["synonyms"])]
     except:
         logging.exception("No synonyms")
-    df["pubchem_logp"] = [compound.xlogp if pd.notnull(compound) else np.NAN for compound in df["pubchem"]]
+    df["pubchem_logp"] = [compound.xlogp if notnull(compound) else np.NAN for compound in df["pubchem"]]
 
     # TODO remove this part as we are not dropping any columns
     # # drop extra columns
@@ -111,16 +109,16 @@ def pubchem_search_by_structure(df) -> pd.DataFrame:
                      zip(df["pubchem"], df["inchikey"], df["smiles"], df["inchi"])]
 
     df["pubchem_cid_parent"] = pd.array(
-        [compound.cid if pd.notnull(compound) else np.NAN for compound in df["pubchem"]],
+        [compound.cid if notnull(compound) else np.NAN for compound in df["pubchem"]],
         dtype=pd.Int64Dtype())
     df["compound_name"] = [get_first_synonym(compound) for compound in df["pubchem"]]
-    df["iupac"] = [compound.iupac_name if pd.notnull(compound) else np.NAN for compound in df["pubchem"]]
+    df["iupac"] = [compound.iupac_name if notnull(compound) else np.NAN for compound in df["pubchem"]]
     try:
-        df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if pd.notnull(compound) else [] for compound
+        df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if notnull(compound) else [] for compound
                                            in df["pubchem"]]
     except:
         logging.exception("No synonyms")
-    df["pubchem_logp"] = [compound.xlogp if pd.notnull(compound) else np.NAN for compound in df["pubchem"]]
+    df["pubchem_logp"] = [compound.xlogp if notnull(compound) else np.NAN for compound in df["pubchem"]]
 
     return df
 
@@ -232,7 +230,7 @@ def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
     :param max_tries: maximum tries
     :return: the synonyms or an empty list on maximum number of tries with fail
     """
-    if pd.isnull(compound):
+    if isnull(compound):
         return []
     try:
         synonyms = compound.synonyms

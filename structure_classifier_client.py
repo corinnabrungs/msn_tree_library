@@ -3,7 +3,7 @@ import urllib.parse
 
 import pandas as pd
 
-from pandas_utils import get_unique_dict
+from pandas_utils import get_unique_dict, isnull
 
 # NP_CLASSIFIER_URL = "https://npclassifier.ucsd.edu/classify?smiles={}"
 # CLASSYFIRE_URL = "https://gnps-structure.ucsd.edu/classyfire?smiles={}"
@@ -20,14 +20,20 @@ NP_CLASSIFIER_SUFFIX = "_npclassifier"
 
 
 def classyfire_smiles_url(smiles):
+    if isnull(smiles):
+        return None
     return CLASSYFIRE_SMILES_URL.format(urllib.parse.quote(smiles))
 
 
 def classyfire_inchikey_url(inchikey):
+    if isnull(inchikey):
+        return None
     return CLASSYFIRE_INCHIKEY_URL.format(urllib.parse.quote(inchikey))
 
 
 def np_classifier_url(smiles):
+    if isnull(smiles):
+        return None
     return NP_CLASSIFIER_URL.format(urllib.parse.quote(smiles))
 
 

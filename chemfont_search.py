@@ -13,7 +13,7 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 def chembl_availability(df) -> pd.DataFrame:
     compounds = [cleanup.client.get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in
                  tqdm(zip(df["chembl_id"], df["inchi_key"]))]
-    df["availability"] = [compound["availability_type"] if pd.notnull(compound) else np.NAN for compound in compounds]
+    df["availability"] = [compound["availability_type"] if notnull(compound) else np.NAN for compound in compounds]
     return df
 
 
@@ -29,10 +29,10 @@ def chemfont_search(df):
         logging.info("DrugCentral search done")
 
         # row[1] is the data row[0] is the columns
-        first_entry_columns = next((row[0] for row in results if pd.notnull(row[0])), [])
+        first_entry_columns = next((row[0] for row in results if notnull(row[0])), [])
         columns = [col.name for col in first_entry_columns]
         elements = len(columns)
-        data = [row[1] if pd.notnull(row[1]) else (None,) * elements for row in results]
+        data = [row[1] if notnull(row[1]) else (None,) * elements for row in results]
         chemfont_df = pd.DataFrame(data=data, columns=columns, index=df.index)
         chemfont_df = chemfont_df.add_prefix(prefix)
         return pd.concat([df, chemfont_df], axis=1)

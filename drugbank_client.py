@@ -4,7 +4,7 @@ import pandas as pd
 
 import pandas_utils
 from rdkit_mol_identifiers import split_inchikey
-from pandas_utils import isnull
+from pandas_utils import isnull, notnull
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -19,28 +19,28 @@ def map_drugbank_approval(status):
 
 
 def find_in_drugbank(drugbank_df, row):
-    if pd.notnull(row["drugbank_id"]):
+    if notnull(row["drugbank_id"]):
         return row["drugbank_id"]
 
     dbid = None
     # pubchem id first, then CHEMBL, then synonyms
-    if pd.notnull(row["drugbank_id"]):
+    if notnull(row["drugbank_id"]):
         dbid = next((d for d in drugbank_df[drugbank_df["drugbank_id"] == row["drugbank_id"]]["drugbank_id"]), None)
-    if pd.notnull(row["inchikey"]):
+    if notnull(row["inchikey"]):
         dbid = next((d for d in drugbank_df[drugbank_df["inchikey"] == row["inchikey"]]["drugbank_id"]), None)
     if isnull(dbid) and not isnull(row["pubchem_cid_parent"]):
         dbid = next((d for d in drugbank_df[drugbank_df["pubchem_cid"] == row["pubchem_cid_parent"]]["drugbank_id"]),
                     None)
-    if isnull(dbid) and pd.notnull(row["chembl_id"]):
+    if isnull(dbid) and notnull(row["chembl_id"]):
         dbid = next((d for d in drugbank_df[drugbank_df["chembl_id"] == row["chembl_id"]]["drugbank_id"]), None)
-    if isnull(dbid) and pd.notnull(row["unii"]):
+    if isnull(dbid) and notnull(row["unii"]):
         dbid = next((d for d in drugbank_df[drugbank_df["unii"] == row["unii"]]["drugbank_id"]), None)
-    if isnull(dbid) and "cas" in row and pd.notnull(row["cas"]):
+    if isnull(dbid) and "cas" in row and notnull(row["cas"]):
         dbid = next((d for d in drugbank_df[drugbank_df["cas"] == row["cas"]]["drugbank_id"]), None)
-    if isnull(dbid) and pd.notnull(row["split_inchikey"]):
+    if isnull(dbid) and notnull(row["split_inchikey"]):
         dbid = next((d for d in drugbank_df[drugbank_df["split_inchikey"] == row["split_inchikey"]]["drugbank_id"]),
                     None)
-    # if pd.isnull(dbid) and row["synonyms"]:
+    # if isnull(dbid) and row["synonyms"]:
     #     dbid = next((d for d in drugbank_df[drugbank_df["compound_name"] in row["synonyms"]]["drugbank_id"]), None)
     return dbid
 

@@ -23,16 +23,16 @@ def drugcentral_search(df):
         logging.info("DrugCentral search done")
 
         # row[1] is the data row[0] is the columns
-        first_entry_columns = next((row[0] for row in results if pd.notnull(row[0])), [])
+        first_entry_columns = next((row[0] for row in results if notnull(row[0])), [])
         columns = [col.name for col in first_entry_columns]
         elements = len(columns)
-        data = [row[1] if pd.notnull(row[1]) else (None,) * elements for row in results]
+        data = [row[1] if notnull(row[1]) else (None,) * elements for row in results]
         dc_df = pd.DataFrame(data=data, columns=columns, index=df.index)
         dc_df = dc_df.add_prefix(prefix)
         df = pd.concat([df, dc_df], axis=1)
 
         if "drugcentral_administration" in df.columns:
-            df["drugcentral_administration_number"] = [4 if pd.notnull(status) else None for status in
+            df["drugcentral_administration_number"] = [4 if notnull(status) else None for status in
                                                        df["drugcentral_administration"]]
         else:
             df["drugcentral_administration_number"] = None

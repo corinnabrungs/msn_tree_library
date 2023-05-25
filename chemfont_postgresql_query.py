@@ -104,7 +104,7 @@ def chemfont_for_row(row):
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)
-                if pd.notnull(value) and len(str(value)) > 0:
+                if notnull(value) and len(str(value)) > 0:
                     with conn.cursor() as cur:
                         try:
                             query = CHEMFONT_SQL.format(sql_condition.format(str(value)))

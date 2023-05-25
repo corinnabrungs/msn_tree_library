@@ -136,9 +136,9 @@ def _add_molid_columns(df) -> pd.DataFrame:
     if "inchi" not in df.columns:
         df["inchi"] = None
     # first strip any salts
-    df["smiles"] = [split_smiles_major_mol(smiles) if pd.notnull(smiles) else np.NAN for smiles in df["smiles"]]
+    df["smiles"] = [split_smiles_major_mol(smiles) if notnull(smiles) else np.NAN for smiles in df["smiles"]]
     df["mol"] = [get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])]
-    df["mol"] = [chembl_standardize_mol(mol) if pd.notnull(mol) else np.NAN for mol in df["mol"]]
+    df["mol"] = [chembl_standardize_mol(mol) if notnull(mol) else np.NAN for mol in df["mol"]]
     df["canonical_smiles"] = [mol_to_canon_smiles(mol) for mol in df["mol"]]
     df["smiles"] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
     df["isomerical_smiles"] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
