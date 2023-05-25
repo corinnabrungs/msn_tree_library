@@ -2,6 +2,7 @@ from configparser import ConfigParser
 
 import logging
 from functools import lru_cache
+from pandas_utils import notnull
 
 import pandas as pd
 import psycopg2

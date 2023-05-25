@@ -1,6 +1,7 @@
 import logging
 import pandas as pd
 from tqdm import tqdm
+from pandas_utils import notnull
 
 import drugcentral_postgresql_query as drugcentral_query
 from rdkit_mol_identifiers import split_inchikey

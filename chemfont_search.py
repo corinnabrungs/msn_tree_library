@@ -1,17 +1,19 @@
-import metadata_cleanup as cleanup
 import logging
 import pandas as pd
 from tqdm import tqdm
 
 import chemfont_postgresql_query as chemfont_query
 import pandas_utils
+from chembl_client import get_chembl_mol
+from pandas_utils import notnull
+import numpy as np
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
 
 def chembl_availability(df) -> pd.DataFrame:
-    compounds = [cleanup.client.get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in
+    compounds = [get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in
                  tqdm(zip(df["chembl_id"], df["inchi_key"]))]
     df["availability"] = [compound["availability_type"] if notnull(compound) else np.NAN for compound in compounds]
     return df

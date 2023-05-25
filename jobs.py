@@ -16,9 +16,9 @@ files_and_lib_ids = [
     # (r"data\nih\nih_library_test.csv", "pluskal_nih"),
     # (r"data\nih\nih_library_new_headers.tsv", "pluskal_nih"),
     # (r"examples\test_metadata.tsv", "test"),
-    # (r"examples\test_metadata_small.tsv", "test"),
+    (r"examples\test_metadata_small.tsv", "test"),
     # (r"data\library\mce_library.tsv", "pluskal_mce"),
-    (r"data\library\mce_library_add_compounds.tsv", "pluskal_mce"),
+    # (r"data\library\mce_library_add_compounds.tsv", "pluskal_mce"),
 ]
 
 if __name__ == "__main__":

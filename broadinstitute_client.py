@@ -2,6 +2,7 @@ import pandas as pd
 import logging
 from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
+from rdkit_mol_identifiers import split_inchikey
 
 tqdm.pandas()
 
@@ -14,10 +15,8 @@ def broad_list_search(df):
     broad_df = broad_df.add_prefix(prefix)
 
     if "split_inchikey" not in df and "inchikey" in df:
-        df["split_inchikey"] = [str(inchikey).split("-")[0] if notnull(inchikey) else None for inchikey in
-                                df['inchikey']]
-    broad_df["split_inchikey"] = [str(inchikey).split("-")[0] if notnull(inchikey) else None for inchikey in
-                                  broad_df["{}InChIKey".format(prefix)]]
+        df["split_inchikey"] = [split_inchikey(inchikey) for inchikey in df['inchikey']]
+    broad_df["split_inchikey"] = [split_inchikey(inchikey) for inchikey in broad_df["{}InChIKey".format(prefix)]]
 
     merged_df = pd.merge(df, broad_df, on="split_inchikey", how="left")
     # converting the clinical phases (from broad institute, chembl, provider, or else) to numbers (remove phase,

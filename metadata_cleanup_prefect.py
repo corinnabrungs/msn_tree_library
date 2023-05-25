@@ -150,8 +150,21 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
     df = drop_duplicates_by_structure_rowid(df)
 
+    # structures are now fetched. Run things in parallel
+    # run in parallel
+    tasks = []
+
+    # GNPS cached version
+    if query_npclassifier:
+        tasks.append(apply_np_classifier_prefect.submit(df))
+
+    # GNPS cached version
+    if query_classyfire:
+        tasks.append(apply_classyfire_prefect.submit(df))
+
     # add new columns for cross references to other databases
     if query_unichem:
+        # xrefs are needed for other steps so run sequential here
         df = search_all_unichem_xrefs_prefect(df, metadata_file)
 
     if query_pubchem_by_structure:
@@ -184,16 +197,6 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
             ["inchikey", "exact_mass", "row_id"], keep="first").sort_index()
     except:
         pass
-
-    # run in parallel
-    tasks = []
-    # GNPS cached version
-    if query_npclassifier:
-        tasks.append(apply_np_classifier_prefect.submit(df))
-
-    # GNPS cached version
-    if query_classyfire:
-        tasks.append(apply_classyfire_prefect.submit(df))
 
     # wait for all tasks in parallel to finish
     result_dfs = [task.result() for task in tasks]
