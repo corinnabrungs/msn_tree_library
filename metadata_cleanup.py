@@ -1,5 +1,6 @@
 import logging
 
+import pandas as pd
 from tqdm import tqdm
 
 import unichem_client
@@ -9,17 +10,103 @@ from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
 from meta_constants import MetaColumns
-from pandas_utils import read_dataframe, add_filename_suffix
-from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure
+from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empy_strings
+from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
+    pubchem_search_structure_by_cid
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
-from synonyms import ensure_synonyms_column, extract_synonym_ids
 from structure_classifier_client import apply_np_classifier, apply_classyfire
+from synonyms import ensure_synonyms_column, extract_synonym_ids
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
 # CONSTANTS
 unique_sample_id_header = "unique_sample_id"
+
+
+def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
+    """
+    Load prepared metadata file from parquet or if not present prepare metadata file. Creates a row_id column to later
+    align results with
+    :param metadata_file: file to load
+    :param lib_id: library id unique description
+    :param plate_id_header: header for plate_id
+    :param well_header: header for well location
+    :return:
+    """
+    out_file = get_parquet_file(metadata_file)
+    try:
+        df = read_dataframe(out_file)
+        logging.info("Loaded prepared metadata file from " + out_file)
+        return df
+    except:
+        logging.info("Preparing metadata file " + metadata_file)
+        df = read_dataframe(metadata_file)
+        create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
+        # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
+        df["row_id"] = df.reset_index().index
+        # ensure compound_name is saved to input_name if this is not defined yet
+        if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
+            df[MetaColumns.input_name] = df[MetaColumns.compound_name]
+
+        ensure_smiles_column(df)
+
+        # apply this here to ensure that structures given as inchi are also present as smiles
+        # get mol from smiles or inchi
+        # calculate all identifiers from mol - exact_mass, ...
+        df = clean_structure_add_mol_id_columns(df, drop_mol=True)
+
+        df.loc[
+            df[MetaColumns.smiles].notnull() | df[MetaColumns.inchi].notnull(), MetaColumns.structure_source] = "input"
+
+        df = ensure_synonyms_column(df)
+        logging.info("Writing prepared metadata file to " + out_file)
+        df.to_parquet(out_file)
+        return df
+
+
+def ensure_smiles_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure presence of smiles column, remove empty strings, and fill all none with smiles in
+    isomeric_smiles>canonical_smiles>smiles
+    """
+    if "inchi" not in df.columns:
+        df["inchi"] = None
+    if "isomerical_smiles" in df.columns:
+        df = df.rename(columns={"isomerical_smiles": MetaColumns.isomeric_smiles})
+
+    # ensure smiles column by priority
+    cols = [MetaColumns.isomeric_smiles, MetaColumns.canonical_smiles, MetaColumns.smiles, "SMILES", "Smiles"]
+    df = remove_empy_strings(df, cols)
+
+    for col in cols:
+        if col in df.columns:
+            df[MetaColumns.smiles] = df[col]
+            break
+    if MetaColumns.smiles not in df.columns:
+        df[MetaColumns.smiles] = None
+
+    # fill NA values by priority
+    for col in cols[1:]:
+        if col in df.columns:
+            df[MetaColumns.smiles] = df[MetaColumns.smiles].fillna(df[col])
+    return df
+
+
+def save_intermediate_parquet(df, metadata_file):
+    """
+    Overwrite parquet file
+    """
+    df = df.drop(columns=["pubchem"], errors="ignore")
+    save_dataframe(df, get_parquet_file(metadata_file))
+
+
+def save_results(df, metadata_file):
+    """
+    Overwrite parquet file and create cleaned metadata file as tsv or csv (depending on input)
+    """
+    save_intermediate_parquet(df, metadata_file)
+    save_dataframe(df, add_filename_suffix(metadata_file, "cleaned"))
 
 
 def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
@@ -44,46 +131,66 @@ def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
         pass
 
 
+def drop_duplicates_by_structure_rowid_reset_index(df):
+    try:
+        id_columns = ["inchikey", "row_id"]
+        df = df.drop_duplicates(id_columns, keep="first").sort_index().reset_index(drop=True)
+    except:
+        pass
+    return df
+
+
+def search_all_unichem_xrefs(df, metadata_file):
+    """
+    Search unichem, save to file, add id columns to dataframe
+    """
+    unichem_df = unichem_client.search_all_xrefs(df)
+    unichem_client.save_unichem_df(metadata_file, unichem_df)
+    df = unichem_client.extract_ids_to_columns(unichem_df, df)
+    return df
+
+
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                 query_pubchem_by_cid: bool = True,
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
                  query_drugbank_list: bool = False, query_drugcentral: bool = False):
     logging.info("Will run on %s", metadata_file)
-    out_file = add_filename_suffix(metadata_file, "cleaned")
+    df = extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
 
-    df = read_dataframe(metadata_file)
-    create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
-
-    # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
-    df["row_id"] = df.reset_index().index
-
-    # ensure compound_name is saved to input_name if this is not defined yet
-    if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
-        df[MetaColumns.input_name] = df[MetaColumns.compound_name]
-
-    df = ensure_synonyms_column(df)
+    if query_pubchem_by_cid:
+        df = pubchem_search_structure_by_cid(df, apply_structures=True)
 
     # Query pubchem by name and CAS
     if query_pubchem_by_name:
         df = pubchem_search_structure_by_name(df)
 
+    save_intermediate_parquet(df, metadata_file)
+
     # get mol from smiles or inchi
     # calculate all identifiers from mol - exact_mass, ...
     if calc_identifiers:
-        clean_structure_add_mol_id_columns(df)
+        df = clean_structure_add_mol_id_columns(df, drop_mol=True)
 
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
-    df = drop_duplicates_by_structure_rowid(df)
+    df = drop_duplicates_by_structure_rowid_reset_index(df)
+    save_intermediate_parquet(df, metadata_file)
 
     # add new columns for cross references to other databases
     if query_unichem:
-        unichem_df = unichem_client.search_all_xrefs(df)
-        unichem_client.save_unichem_df(metadata_file, unichem_df)
-        df = unichem_client.extract_ids_to_columns(unichem_df, df)
+        search_all_unichem_xrefs(df, metadata_file)
+
+    save_intermediate_parquet(df, metadata_file)
+
+    if query_pubchem_by_cid:
+        # CID gathered from unichem came from structure, do not change structure this time
+        df = pubchem_search_structure_by_cid(df, apply_structures=False)
 
     if query_pubchem_by_structure:
         df = pubchem_search_by_structure(df)
+
+    save_intermediate_parquet(df, metadata_file)
 
     # extract ids like the UNII, ...
     df = ensure_synonyms_column(df)
@@ -91,21 +198,24 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
 
     if query_chembl:
         df = chembl_search_id_and_inchikey(df)
+        save_intermediate_parquet(df, metadata_file)
 
     if query_broad_list:
         df = broad_list_search(df)
+        save_intermediate_parquet(df, metadata_file)
 
     if query_drugbank_list:
         df = drugbank_search_add_columns(df)
+        save_intermediate_parquet(df, metadata_file)
 
     if query_drugcentral:
         df = drugcentral_search(df)
+        save_intermediate_parquet(df, metadata_file)
 
     # Converting numbers back to phase X, launched or preclinic
-    df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
-                                        df["clinical_phase"]]
+    df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in df["clinical_phase"]]
     # drop mol
-    df = df.drop(columns=['mol', 'pubchem'])
+    df = df.drop(columns=['mol', 'pubchem'], errors="ignore")
     df["none"] = df.isnull().sum(axis=1)
     try:
         df = df.sort_values(by="none", ascending=True).drop_duplicates(
@@ -116,26 +226,15 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     # GNPS cached version
     if query_npclassifier:
         df = apply_np_classifier(df)
+        save_intermediate_parquet(df, metadata_file)
 
     # GNPS cached version
     if query_classyfire:
         df = apply_classyfire(df)
+        save_intermediate_parquet(df, metadata_file)
 
     # export metadata file
-    logging.info("Exporting to file %s", out_file)
-    if metadata_file.endswith(".tsv"):
-        df.to_csv(out_file, sep="\t", index=False)
-    else:
-        df.to_csv(out_file, sep=",", index=False)
-
-
-def drop_duplicates_by_structure_rowid(df):
-    try:
-        id_columns = ["inchikey", "row_id"]
-        df = df.drop_duplicates(id_columns, keep="first").sort_index()
-    except:
-        pass
-    return df
+    save_results(df, metadata_file)
 
 
 if __name__ == "__main__":

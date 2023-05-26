@@ -11,7 +11,7 @@ def isnull(o):
             return True
 
         so = str(o).lower()
-        if so == '<na>' or so == "n/a" or so == "na" or so == "nan":
+        if so == '<na>' or so == "n/a" or so == "na" or so == "nan" or so == "nat":
             return True
 
         result = pd.isnull(o)
@@ -33,6 +33,10 @@ def read_dataframe(file):
         df = pd.read_csv(file, sep="\t")
     elif file.endswith('.csv'):
         df = pd.read_csv(file)
+    elif file.endswith('.parquet', '.parquet.gz', '.parquet.gzip'):
+        df = pd.read_parquet(file)
+    elif file.endswith('.feather'):
+        df = pd.read_feather(file)
     elif file.endswith('.xls', 'xlsx'):
         df = pd.read_excel(file)
     elif file.endswith('.xml'):
@@ -48,6 +52,38 @@ def read_dataframe(file):
     return df
 
 
+def save_dataframe(df, out_file):
+    logging.info("Exporting to file %s", out_file)
+    if out_file.endswith(".tsv"):
+        df.to_csv(out_file, sep="\t", index=False)
+    elif out_file.endswith('.parquet'):
+        df.to_parquet(out_file)
+    elif out_file.endswith('.parquet.gz', '.parquet.gzip'):
+        df.to_parquet(out_file, compression='gzip')
+    elif out_file.endswith('.feather'):
+        df.to_feather(out_file)
+    else:
+        df.to_csv(out_file, sep=",", index=False)
+
+
+def get_parquet_file(metadata_file, gzip=False):
+    if gzip:
+        return replace_format(metadata_file, ".parquet.gzip")
+    return replace_format(metadata_file, ".parquet")
+
+
+def replace_format(filename, format_override):
+    """
+
+    :param filename: original file
+    :param format_override: change file format
+    :return: filename.format
+    """
+    format_override = format_override if format_override.startswith(".") else "." + format_override
+    p = Path(filename)
+    return "{0}{1}".format(Path.joinpath(p.parent, p.stem), format_override)
+
+
 def add_filename_suffix(filename, suffix, format_override=None):
     """
 
@@ -58,7 +94,29 @@ def add_filename_suffix(filename, suffix, format_override=None):
     """
     p = Path(filename)
     file_format = p.suffix if format_override is None else format_override
+    file_format = file_format if file_format.startswith(".") else "." + file_format
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, file_format)
+
+
+def remove_empy_strings(df: pd.DataFrame, columns) -> pd.DataFrame:
+    if isinstance(columns, str):
+        columns = [columns]
+
+    for col in columns:
+        if col in df.columns:
+            df[col] = [v if isinstance(v, str) and len(v) > 0 else None for v in df[col]]
+
+    return df
+
+
+def update_dataframes(newdf: pd.DataFrame, olddf: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merges old df into newdf so that new columns are added and filled. NA values in newdf are filled with olddf values.
+    :param newdf: new dataframe, can be a filtered slice of the old df
+    :param olddf: the old original dataframe
+    :return: new dataframe
+    """
+    return combine_dfs_fill_missing_values(newdf, olddf)
 
 
 def combine_dfs_fill_missing_values(target: pd.DataFrame, source: pd.DataFrame) -> pd.DataFrame:

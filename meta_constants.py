@@ -4,6 +4,22 @@ from strenum import StrEnum
 
 
 class MetaColumns(StrEnum):
+    # run dates
+    date_pubchem_cid_search = auto()
+    date_pubchem_name_search = auto()
+    date_pubchem_structure_search = auto()
+    date_unichem_search = auto()
+    date_chembl_search = auto()
+    date_npclassifier = auto()
+    date_classyfire = auto()
+    date_npatlas = auto()
+    date_broad_drug_list = auto()
+    date_drugbank_search = auto()
+    date_drugcentral_search = auto()
+    date_wikidata_lotus_search = auto()
+    #
+    structure_source = auto()
+
     # sample sequence specific
     well_location = auto()
     plate_id = auto()

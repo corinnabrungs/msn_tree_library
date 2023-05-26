@@ -1,5 +1,6 @@
 import logging
 
+from scipy.linalg import dft
 from tqdm import tqdm
 import argparse
 import unichem_client
@@ -9,8 +10,11 @@ from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
 from meta_constants import MetaColumns
-from pandas_utils import read_dataframe, add_filename_suffix
-from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure
+from metadata_cleanup import extract_prepare_input_data, save_results, drop_duplicates_by_structure_rowid_reset_index, \
+    search_all_unichem_xrefs, save_intermediate_parquet
+from pandas_utils import read_dataframe, add_filename_suffix, replace_format, save_dataframe, get_parquet_file
+from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
+    pubchem_search_structure_by_cid
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
 from synonyms import ensure_synonyms_column, extract_synonym_ids
 from structure_classifier_client import apply_np_classifier, apply_classyfire
@@ -23,35 +27,19 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 unique_sample_id_header = "unique_sample_id"
 
 
-def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
-    """
-    generates a column with unique sample IDs if column with well locations and plate IDs (optional) is available.
-    :param df: metadata
-    :param lib_id: library id that defines the compound library
-    :param plate_id_header: number or name of the plate
-    :param well_header: well location of the injection
-    :return: lib_id_plate_well_id
-    """
-    try:
-        if well_header in df.columns:
-            if plate_id_header in df.columns:
-                df[unique_sample_id_header] = ["{}_{}_{}_id".format(lib_id, plate, well) for plate, well in
-                                               zip(df[plate_id_header], df[well_header])]
-            else:
-                df[unique_sample_id_header] = ["{}_{}_id".format(lib_id, well) for well in df[well_header]]
-    except:
-        logging.info(
-            "No well location and plate id found to construct unique ID which is needed for library generation")
-        pass
+@task(name="save results")
+def extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
+    return extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
 
 
-def drop_duplicates_by_structure_rowid(df):
-    try:
-        id_columns = ["inchikey", "row_id"]
-        df = df.drop_duplicates(id_columns, keep="first").sort_index()
-    except:
-        pass
-    return df
+@task(name="save results")
+def save_results_prefect(df, metadata_file):
+    save_results(df, metadata_file)
+
+
+@task(name="PubChem by CID")
+def pubchem_search_structure_by_cid_prefect(df, apply_structures: bool):
+    return pubchem_search_structure_by_cid(df, apply_structures)
 
 
 @task(name="PubChem by name")
@@ -61,15 +49,12 @@ def pubchem_search_structure_by_name_prefect(df):
 
 @task(name="Clean structures")
 def clean_structure_add_mol_id_columns_prefect(df):
-    return clean_structure_add_mol_id_columns(df)
+    return clean_structure_add_mol_id_columns(df, drop_mol=True)
 
 
 @task(name="search_all_unichem_xrefs")
 def search_all_unichem_xrefs_prefect(df, metadata_file):
-    unichem_df = unichem_client.search_all_xrefs(df)
-    unichem_client.save_unichem_df(metadata_file, unichem_df)
-    df = unichem_client.extract_ids_to_columns(unichem_df, df)
-    return df
+    return search_all_unichem_xrefs(df, metadata_file)
 
 
 @task(name="pubchem_search_by_structure")
@@ -107,40 +92,25 @@ def apply_classyfire_prefect(df):
     return apply_classyfire(df)
 
 
-@task(name="save results")
-def save_results_prefect(df, out_file):
-    logging.info("Exporting to file %s", out_file)
-    if out_file.endswith(".tsv"):
-        df.to_csv(out_file, sep="\t", index=False)
-    else:
-        df.to_csv(out_file, sep=",", index=False)
-
-
 @flow(name="Metadata cleanup",
       version="0.1.0")
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                 query_pubchem_by_cid: bool = True,
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
                  query_drugbank_list: bool = False, query_drugcentral: bool = False):
     logging.info("Will run on %s", metadata_file)
-    out_file = add_filename_suffix(metadata_file, "cleaned")
+    df = extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header, well_header)
 
-    df = read_dataframe(metadata_file)
-    create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
-
-    # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
-    df["row_id"] = df.reset_index().index
-
-    # ensure compound_name is saved to input_name if this is not defined yet
-    if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
-        df[MetaColumns.input_name] = df[MetaColumns.compound_name]
-
-    df = ensure_synonyms_column(df)
+    if query_pubchem_by_cid:
+        df = pubchem_search_structure_by_cid_prefect(df, apply_structures=True)
 
     # Query pubchem by name and CAS
     if query_pubchem_by_name:
         df = pubchem_search_structure_by_name_prefect(df)
+
+    save_intermediate_parquet(df, metadata_file)
 
     # get mol from smiles or inchi
     # calculate all identifiers from mol - exact_mass, ...
@@ -148,7 +118,8 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
         df = clean_structure_add_mol_id_columns_prefect(df)
 
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
-    df = drop_duplicates_by_structure_rowid(df)
+    df = drop_duplicates_by_structure_rowid_reset_index(df)
+    save_intermediate_parquet(df, metadata_file)
 
     # structures are now fetched. Run things in parallel
     # run in parallel
@@ -166,6 +137,9 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     if query_unichem:
         # xrefs are needed for other steps so run sequential here
         df = search_all_unichem_xrefs_prefect(df, metadata_file)
+
+    if query_pubchem_by_cid:
+        df = pubchem_search_structure_by_cid_prefect(df, apply_structures=False)
 
     if query_pubchem_by_structure:
         df = pubchem_search_by_structure_prefect(df)
@@ -190,7 +164,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     df["clinical_phase_description"] = [get_clinical_phase_description(number) for number in
                                         df["clinical_phase"]]
     # drop mol
-    df = df.drop(columns=['mol', 'pubchem'])
+    df = df.drop(columns=['mol', 'pubchem'], errors="ignore")
     df["none"] = df.isnull().sum(axis=1)
     try:
         df = df.sort_values(by="none", ascending=True).drop_duplicates(
@@ -202,7 +176,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     result_dfs = [task.result() for task in tasks]
 
     # export metadata file
-    save_results_prefect(df, out_file)
+    save_results_prefect(df)
 
 
 def full_cleanup_file(metadata_file, lib_id, flow_run_name=None):

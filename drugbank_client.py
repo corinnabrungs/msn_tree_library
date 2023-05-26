@@ -76,8 +76,8 @@ def drugbank_list_search(df):
     # merged_df["chembl_id"].combine_first(merged_df["{}chembl_id".format(prefix)], inplace=True)
     # merged_df.combine_first(merged_df["{}name".format(prefix)], inplace=True)
     return merged_df.drop(
-        ["drugbank_drugbank_id", "{}inchikey".format(prefix), "{}smiles".format(prefix), f"{prefix}unii",
-         f"{prefix}chembl_id", "{}split_inchikey".format(prefix)], axis=1)
+        columns=["drugbank_drugbank_id", "{}inchikey".format(prefix), "{}smiles".format(prefix), f"{prefix}unii",
+                 f"{prefix}chembl_id", "{}split_inchikey".format(prefix)], errors="ignore")
 
 
 def drugbank_search_add_columns(df):

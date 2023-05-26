@@ -33,4 +33,5 @@ def broad_list_search(df):
     # Comparing the clinical phases, only store the highest number in clinical phase column
     merged_df["clinical_phase"] = merged_df[['broad_clinical_phase', 'clinical_phase', 'Clinical Information']].max(
         axis=1)
-    return merged_df.drop(["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)], axis=1)
+    return merged_df.drop(columns=["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)],
+                          errors="ignore")

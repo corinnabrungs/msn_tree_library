@@ -1,13 +1,17 @@
+import datetime as dt
 import logging
 # from diskcache import Cache
 # cache = Cache("tmpcache")
-import numpy as np
 import pandas as pd
 import pubchempy
 from joblib import Memory
 from pubchempy import Compound, get_compounds
 
-from pandas_utils import notnull, isnull
+import pandas_utils
+from date_utils import check_within_timedelta_from_now, create_expired_entries_dataframe, iso_datetime_now, \
+    set_date_if_notnull
+from meta_constants import MetaColumns
+from pandas_utils import notnull, isnull, update_dataframes, get_or_else
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -17,6 +21,16 @@ logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 memory = Memory("memcache")
 
 
+def copy_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
+    try:
+        pc_synonyms = [pubchem_get_synonyms(compound) for compound in df["pubchem"]]
+        df[MetaColumns.synonyms] = [[] if isnull(synonyms) else synonyms for synonyms in df["synonyms"]]
+        df[MetaColumns.synonyms] = [a + b for a, b in zip(pc_synonyms, df["synonyms"])]
+    except:
+        logging.exception("No synonyms")
+    return df
+
+
 def pubchem_search_by_cid(row):
     if notnull(row["pubchem"]):
         return row["pubchem"]
@@ -24,103 +38,148 @@ def pubchem_search_by_cid(row):
     compound = None
     if "pubchem_cid_parent" in row:
         compound = pubchem_by_cid(row["pubchem_cid_parent"])
-    if isnull(compound) and "pubchem_cid" in row:
-        compound = pubchem_by_cid(row["pubchem_cid"])
+    if isnull(compound) and MetaColumns.pubchem_cid in row:
+        compound = pubchem_by_cid(row[MetaColumns.pubchem_cid])
 
     return compound
+
+
+name_search_columns = [MetaColumns.compound_name, MetaColumns.cas, MetaColumns.input_name, "product_name"]
 
 
 def pubchem_search_by_names(row) -> str | None:
     if notnull(row["pubchem"]):
         return row["pubchem"]
 
-    compound = pubchem_search_by_cid(row)
-    if isnull(compound) and "compound_name" in row and notnull(row["compound_name"]):
-        compound = search_pubchem_by_name(str(row["compound_name"]))
-    if isnull(compound) and "cas" in row and notnull(row["cas"]):
-        compound = search_pubchem_by_name(row["cas"])
-    if isnull(compound) and "product_name" in row:
-        compound = search_pubchem_by_name(row["product_name"])
+    for col in name_search_columns:
+        value = get_or_else(row, col)
+        if isinstance(value, str) and len(value) > 0:
+            compound = search_pubchem_by_name(value)
+            if notnull(compound):
+                return compound
 
-    return compound
+    return None
 
 
-def pubchem_search_structure_by_name(df) -> pd.DataFrame:
+def transform_pubchem_columns(filtered: pd.DataFrame, apply_structures: bool) -> pd.DataFrame:
     from synonyms import get_first_synonym
+    filtered[MetaColumns.pubchem_cid] = [str(compound.cid) for compound in filtered["pubchem"]]
+    filtered[MetaColumns.pubchem_cid_parent] = filtered[MetaColumns.pubchem_cid]
+    filtered[MetaColumns.compound_name] = [get_first_synonym(compound) for compound in filtered["pubchem"]]
+    filtered[MetaColumns.iupac] = [compound.iupac_name for compound in filtered["pubchem"]]
+    filtered["pubchem_logp"] = [compound.xlogp for compound in filtered["pubchem"]]
+    filtered = copy_pubchem_synonyms(filtered)
+    if apply_structures:
+        filtered[MetaColumns.isomeric_smiles] = [compound.isomeric_smiles for compound in filtered["pubchem"]]
+        filtered[MetaColumns.canonical_smiles] = [compound.canonical_smiles for compound in filtered["pubchem"]]
 
-    logging.info("Search PubChem by name")
-    df["pubchem"] = None
-    df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_names(row), axis=1)
+    return filtered
 
-    df["pubchem_cid"] = pd.array([compound.cid if notnull(compound) else np.NAN for compound in df["pubchem"]],
-                                 dtype=pd.Int64Dtype())
-    df["isomerical_smiles"] = [compound.isomeric_smiles if notnull(compound) else np.NAN for compound in
-                               df["pubchem"]]
-    df["canonical_smiles"] = [compound.canonical_smiles if notnull(compound) else np.NAN for compound in
-                              df["pubchem"]]
 
-    df["pubchem_cid_parent"] = df["pubchem_cid"]
-    df["compound_name"] = [get_first_synonym(compound) for compound in df["pubchem"]]
-    df["iupac"] = [compound.iupac_name if notnull(compound) else np.NAN for compound in df["pubchem"]]
-    try:
-        pc_synonyms = [pubchem_get_synonyms(compound) if notnull(compound) else [] for compound in df["pubchem"]]
-        df["synonyms"] = [[] if isnull(synonyms) else synonyms for synonyms in df["synonyms"]]
-        df["synonyms"] = [a + b for a, b in zip(pc_synonyms, df["synonyms"])]
-    except:
-        logging.exception("No synonyms")
-    df["pubchem_logp"] = [compound.xlogp if notnull(compound) else np.NAN for compound in df["pubchem"]]
+def split_label_structure_sources(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
+    from metadata_cleanup import ensure_smiles_column
 
-    # TODO remove this part as we are not dropping any columns
-    # # drop extra columns
-    # columns_to_keep = df.columns.isin(
-    #     ["pubchem", "Cat. No.", "product_name", "synonyms", "cas", "smiles", "pubchem_cid", "pubchem_cid_parent",
-    #      "isomerical_smiles",
-    #      "canonical_smiles", "mixed_location_plate1", "lib_plate_well", "URL", "Target", "Information", "Pathway",
-    #      "Research Area", "Clinical Information", "gnps_libid", "compound_name", "iupac", "pubchem_logp", "entries"])
-    #
-    # df = df[df.columns[columns_to_keep]]
-    # concat the new structures with the old ones
-    if "smiles" in df and len(df[df["smiles"].notna()]) > 0:
-        dfa = df.copy()
+    input_smiles_df = df[df[MetaColumns.smiles].notnull()].copy()
 
-        dfa["source"] = "input"
-        dfb = df.copy()
-        dfb["smiles"] = [iso if notnull(iso) else smiles for iso, smiles in zip(df["isomerical_smiles"], df["smiles"])]
-        dfb["source"] = "PubChem"
-
-        dfb = dfb[dfb["smiles"].notna()]
-
-        df = pd.concat([dfb, dfa], ignore_index=True, sort=False)
-
+    if len(input_smiles_df) > 0:
+        # concat the new structures with the old ones
+        pubchem_smiles_df = df[df[MetaColumns.isomeric_smiles].notnull() |
+                               df[MetaColumns.canonical_smiles].notnull()].copy()
+        pubchem_smiles_df[MetaColumns.structure_source] = source_name
+        pubchem_smiles_df[MetaColumns.smiles] = None
+        pubchem_smiles_df = ensure_smiles_column(pubchem_smiles_df)
+        # priority pubchem over input later when drop duplicates
+        df = pd.concat([pubchem_smiles_df, input_smiles_df], ignore_index=False, sort=False)
     else:
-        df["smiles"] = [iso if notnull(iso) else smiles for iso, smiles in zip(df["isomerical_smiles"], df["smiles"])]
-        df["source"] = "PubChem"
+        # no structures were available before - just copy the structures over
+        df = ensure_smiles_column(df)
+        df[MetaColumns.structure_source] = source_name
     return df
 
 
-def pubchem_search_by_structure(df) -> pd.DataFrame:
-    from synonyms import get_first_synonym
+def pubchem_search_structure_by_cid(df: pd.DataFrame, apply_structures: bool,
+                                    refresh_expired_entries_after: dt.timedelta = dt.timedelta(
+                                        days=90)) -> pd.DataFrame:
+    logging.info("Search PubChem by pubchem_cid")
+    df["pubchem"] = None
 
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_cid_search,
+                                                refresh_expired_entries_after)
+
+    # some are filled from the name  or cid search
+    filtered["pubchem"] = filtered.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
+    filtered = filtered[filtered["pubchem"].notnull()].copy()
+    # refresh date
+    filtered[MetaColumns.date_pubchem_cid_search] = iso_datetime_now()
+
+    # transform create columns, do not copy structures as they are already cleaned by this script
+    filtered = transform_pubchem_columns(filtered, apply_structures=apply_structures)
+
+    if not apply_structures:
+        filtered = split_label_structure_sources(filtered, source_name="pubchem_cid")
+
+    # combine new data with old rows that were not processed
+    # keep pubchem to limit name search
+    return update_dataframes(filtered, df)
+    # return update_dataframes(filtered, df).drop(columns=["pubchem"], errors="ignore")
+
+
+def pubchem_search_structure_by_name(df: pd.DataFrame, refresh_expired_entries_after: dt.timedelta = dt.timedelta(
+    days=90)) -> pd.DataFrame:
+    logging.info("Search PubChem by name")
+    if "pubchem" not in df.columns:
+        df["pubchem"] = None
+
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_name_search, refresh_expired_entries_after)
+
+    # apply search but limit to those without pubchem results from CID search
+    filtered = filtered[filtered["pubchem"].isnull()].copy()
+    filtered["pubchem"] = filtered.progress_apply(lambda row: pubchem_search_by_names(row), axis=1)
+    filtered = filtered[filtered["pubchem"].notnull()].copy()
+    # refresh date
+    filtered[MetaColumns.date_pubchem_name_search] = iso_datetime_now()
+
+    # transform create new columns
+    filtered = transform_pubchem_columns(filtered, apply_structures=True)
+
+    filtered = split_label_structure_sources(filtered, source_name="pubchem_name")
+
+    # combine new data with old rows that were not processed
+    # clear pubchem to allow CID and structure search on all of them
+    # return update_dataframes(filtered, df)
+    return update_dataframes(filtered, df).drop(columns=["pubchem"], errors="ignore")
+
+
+def pubchem_search_by_structure(df: pd.DataFrame,
+                                refresh_expired_entries_after: dt.timedelta = dt.timedelta(days=90)) -> pd.DataFrame:
     logging.info("Search PubChem by structure")
-    df["pubchem"] = df.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
+    if "pubchem" not in df.columns:
+        df["pubchem"] = None
 
-    df["pubchem"] = [search_pubchem_by_structure(smiles, inchi, inchikey) if isnull(compound) else compound for
-                     compound, inchikey, smiles, inchi in
-                     zip(df["pubchem"], df["inchikey"], df["smiles"], df["inchi"])]
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_structure_search,
+                                                refresh_expired_entries_after)
 
-    df["pubchem_cid_parent"] = pd.array(
-        [compound.cid if notnull(compound) else np.NAN for compound in df["pubchem"]],
-        dtype=pd.Int64Dtype())
-    df["compound_name"] = [get_first_synonym(compound) for compound in df["pubchem"]]
-    df["iupac"] = [compound.iupac_name if notnull(compound) else np.NAN for compound in df["pubchem"]]
-    try:
-        df["synonyms"] = df["synonyms"] + [pubchem_get_synonyms(compound) if notnull(compound) else [] for compound
-                                           in df["pubchem"]]
-    except:
-        logging.exception("No synonyms")
-    df["pubchem_logp"] = [compound.xlogp if notnull(compound) else np.NAN for compound in df["pubchem"]]
+    filtered = filtered[filtered["pubchem"].isnull()].copy()
+    filtered["pubchem"] = [search_pubchem_by_structure(smiles, inchi, inchikey) for
+                           inchikey, smiles, inchi in
+                           zip(filtered["inchikey"], filtered[MetaColumns.smiles], filtered["inchi"])]
 
-    return df
+    filtered = filtered[filtered["pubchem"].notnull()].copy()
+    # refresh date
+    filtered[MetaColumns.date_pubchem_structure_search] = iso_datetime_now()
+
+    # transform create columns, do not copy structures as they are already cleaned by this script
+    filtered = transform_pubchem_columns(filtered, apply_structures=False)
+
+    # combine new data with old rows that were not processed
+    # clear pubchem to allow CID and structure search on all of them
+    return update_dataframes(filtered, df).drop(columns=["pubchem"], errors="ignore")
 
 
 def pubchem_compound_score(comp: Compound):
@@ -187,7 +246,7 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
         if inchikey:
             compounds = get_pubchem_compound(inchikey, "inchikey")
         if not compounds and smiles:
-            compounds = get_pubchem_compound(smiles, "smiles")
+            compounds = get_pubchem_compound(smiles, MetaColumns.smiles)
         if not compounds and inchi:
             compounds = get_pubchem_compound(inchi, "inchi")
         if not compounds:

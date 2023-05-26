@@ -8,6 +8,8 @@ from rdkit.Chem.MolStandardize import rdMolStandardize
 
 from chembl_structure_pipeline import standardizer
 
+from meta_constants import MetaColumns
+from metadata_cleanup import ensure_smiles_column
 from pandas_utils import notnull, isnull
 
 
@@ -121,15 +123,19 @@ def get_rdkit_mol(smiles, inchi):
     return mol
 
 
-def clean_structure_add_mol_id_columns(df) -> pd.DataFrame:
+def clean_structure_add_mol_id_columns(df, drop_mol=True) -> pd.DataFrame:
     """
     Will be performed twice to make sure structures are cleaned
     :param df: data frame with smiles and/or inchi columns
+    :param drop_mol: drop mol column if True otherwise retain the column as "mol"
     :return: dataframe
     """
     logging.info("RDkit - predict properties")
     df = _add_molid_columns(df)
-    return _add_molid_columns(df)
+    df = _add_molid_columns(df)
+    if drop_mol:
+        df = df.drop(columns=['mol'], errors="ignore")
+    return df
 
 
 def _add_molid_columns(df) -> pd.DataFrame:
@@ -140,12 +146,14 @@ def _add_molid_columns(df) -> pd.DataFrame:
     df["mol"] = [get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])]
     df["mol"] = [chembl_standardize_mol(mol) if notnull(mol) else np.NAN for mol in df["mol"]]
     df["canonical_smiles"] = [mol_to_canon_smiles(mol) for mol in df["mol"]]
-    df["smiles"] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
-    df["isomerical_smiles"] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
+    df[MetaColumns.isomeric_smiles] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
     df["smarts"] = [mol_to_smarts(mol) for mol in df["mol"]]
     df["exact_mass"] = [exact_mass_from_mol(mol) for mol in df["mol"]]
     df["inchi"] = [inchi_from_mol(mol) for mol in df["mol"]]
     df["inchikey"] = [inchikey_from_mol(mol) for mol in df["mol"]]
     df["split_inchikey"] = [str(inchikey).split("-")[0] for inchikey in df['inchikey']]
     df["formula"] = [formula_from_mol(mol) for mol in df["mol"]]
+
+    # merge all smiles from isomeric_smiles>canonical_smiles>smiles
+    df = ensure_smiles_column(df)
     return df
