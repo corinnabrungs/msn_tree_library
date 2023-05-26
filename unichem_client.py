@@ -5,7 +5,11 @@ from strenum import StrEnum
 
 import pandas as pd
 
+from pandas_utils import get_first_value_or_else
 from rest_utils import get_json_response_with_headers
+from joblib import Memory
+
+memory = Memory("memcache")
 
 # links to the unichem interface, insert a UCI
 UNI_CHEM_COMPOUND_URL = "https://www.ebi.ac.uk/unichem/compoundsources?type=uci&compound={}"
@@ -37,7 +41,7 @@ class Sources(Source, Enum):
     drugbank_source = "drugbank"
     hmdb_source = "hmdb"
     zinc_source = "zinc"
-    surechembl_source = ("surechembl", "schembl")
+    surechembl_source = ("surechembl", "schembl_id")
     unichem_source = "unichem"
     nmrshiftdb2_source = "nmrshiftdb2"
     kegg_ligand_source = "kegg_ligand"
@@ -52,6 +56,7 @@ class Sources(Source, Enum):
     fdasis_source = ("fdasis", "unii")
 
 
+@memory.cache
 def search_unichem_xref(structure: str, search_type="inchikey") -> None | dict:
     if structure is None or len(structure) == 0:
         return None
@@ -106,6 +111,7 @@ def search_all_xrefs(df) -> pd.DataFrame:
     """
     logging.info("Running uni chem search for cross references")
     unichem_results = pd.concat(df.apply(lambda row: search_unichem_xref_for_row(row), axis=1).array)
+    unichem_results = unichem_results.drop_duplicates().reset_index(drop=True)
     return unichem_results
 
 
@@ -143,7 +149,7 @@ def _get_first_value(unichem_df: pd.DataFrame, inchikey: str, source: Source, ex
     if len(df) == 0:
         return None
 
-    return df.at[df.index[0], extract_column]
+    return get_first_value_or_else(df, extract_column)
 
 
 def save_unichem_df(base_file, df: pd.DataFrame):

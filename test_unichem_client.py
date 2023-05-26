@@ -10,10 +10,16 @@ class Test(TestCase):
         result = unichem_client.search_unichem_xref(inchikey, search_type="inchikey")
         assert result is not None
 
+    def test_search_unichem_xref_listids(self):
+        inchikey = "XQYZDYMELSJDRZ-UHFFFAOYSA-N"
+        result = unichem_client.search_unichem_xref(inchikey, search_type="inchikey")
+        assert result is not None
+
     def test_search_all_unichem_xrefs(self):
         df = pd.DataFrame(
             {
-                "inchikey": ["MXXWOMGUGJBKIW-YPCIICBESA-N", "BSYNRYMUTXBXSQ-UHFFFAOYSA-N", None, ""]
+                "inchikey": ["XQYZDYMELSJDRZ-UHFFFAOYSA-N", "MXXWOMGUGJBKIW-YPCIICBESA-N",
+                             "BSYNRYMUTXBXSQ-UHFFFAOYSA-N", None, ""]
             }
         )
         result_df = unichem_client.search_all_xrefs(df)
@@ -24,7 +30,10 @@ class Test(TestCase):
     def test_extract_ids_to_columns(self):
         df = pd.DataFrame(
             {
-                "inchikey": ["MXXWOMGUGJBKIW-YPCIICBESA-N", "BSYNRYMUTXBXSQ-UHFFFAOYSA-N", None, ""]
+                "inchikey": ["XQYZDYMELSJDRZ-UHFFFAOYSA-N", "XQYZDYMELSJDRZ-UHFFFAOYSA-N",
+                             "XQYZDYMELSJDRZ-UHFFFAOYSA-N",
+                             "MXXWOMGUGJBKIW-YPCIICBESA-N",
+                             "BSYNRYMUTXBXSQ-UHFFFAOYSA-N", None, ""]
             }
         )
         result_df = unichem_client.search_all_xrefs(df)

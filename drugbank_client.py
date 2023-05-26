@@ -60,6 +60,9 @@ def drugbank_list_search(df):
     # find drugbank IDs in drugbank table by PubChem, ChEMBL etc
     df["drugbank_id"] = df.progress_apply(lambda row: find_in_drugbank(drugbank_df, row), axis=1)
 
+    # TODO check issue that sometimes we get series not hashable exception
+    df["drugbank_id"] = [did if isinstance(did, str) else None for did in df["drugbank_id"]]
+
     drugbank_df = drugbank_df.add_prefix(prefix)
     merged_df = pd.merge(df, drugbank_df, left_on="drugbank_id", right_on="drugbank_drugbank_id", how="left")
 

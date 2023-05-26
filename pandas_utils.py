@@ -71,6 +71,10 @@ def combine_dfs_fill_missing_values(target: pd.DataFrame, source: pd.DataFrame) 
     return target.combine_first(source)  # alternative df.combine_first
 
 
+def get_first_value_or_else(df: pd.DataFrame, column: str, default=None):
+    return next((v for v in df[column]), default)
+
+
 def get_or_else(row, key, default=None):
     return row[key] if key in row and notnull(row[key]) else default
 
