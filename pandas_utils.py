@@ -33,7 +33,7 @@ def read_dataframe(file):
         df = pd.read_csv(file, sep="\t")
     elif file.endswith('.csv'):
         df = pd.read_csv(file)
-    elif file.endswith('.parquet', '.parquet.gz', '.parquet.gzip'):
+    elif file.endswith(('.parquet', '.parquet.gz', '.parquet.gzip')):
         df = pd.read_parquet(file)
     elif file.endswith('.feather'):
         df = pd.read_feather(file)
@@ -122,6 +122,26 @@ def remove_empty_lists_values(df: pd.DataFrame, columns) -> pd.DataFrame:
     return df
 
 
+def join_unique(values, separator: str = "; "):
+    try:
+        if isinstance(values, str):
+            return values
+        return separator.join(get_unique_list(values, False))
+    except:
+        return None
+
+
+def groupby_join_unique_values(df: pd.DataFrame, columns, as_lists: bool = False,
+                               str_separator: str = "; ") -> pd.DataFrame:
+    if isinstance(columns, str):
+        columns = [columns]
+
+    if as_lists:
+        return df.groupby(columns).agg(lambda col: list(set(col))).reset_index()
+    else:
+        return df.groupby(columns).agg(lambda col: join_unique(col, str_separator)).reset_index()
+
+
 def update_dataframes(newdf: pd.DataFrame, olddf: pd.DataFrame) -> pd.DataFrame:
     """
     Merges old df into newdf so that new columns are added and filled. NA values in newdf are filled with olddf values.
@@ -150,10 +170,12 @@ def get_or_else(row, key, default=None):
     return row[key] if key in row and notnull(row[key]) else default
 
 
-def get_unique_list(input_list):
+def get_unique_list(input_list, ignore_case: bool = True):
     seen = set()
-    unique = [x for x in input_list if x.lower() not in seen and not seen.add(x.lower())]
-    return unique
+    if ignore_case:
+        return [x for x in input_list if notnull(x) and x.lower() not in seen and not seen.add(x.lower())]
+    else:
+        return [x for x in input_list if notnull(x) and x not in seen and not seen.add(x)]
 
 
 def get_unique_dict(df, column):

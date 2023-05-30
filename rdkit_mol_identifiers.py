@@ -140,6 +140,8 @@ def clean_structure_add_mol_id_columns(df, drop_mol=True) -> pd.DataFrame:
 def _add_molid_columns(df) -> pd.DataFrame:
     if MetaColumns.inchi not in df.columns:
         df[MetaColumns.inchi] = None
+    # merge all smiles from isomeric_smiles>canonical_smiles>smiles
+    df = ensure_smiles_column(df)
     # first strip any salts
     df[MetaColumns.smiles] = [split_smiles_major_mol(smiles) if notnull(smiles) else np.NAN for smiles in df["smiles"]]
     df["mol"] = [get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])]
@@ -150,7 +152,7 @@ def _add_molid_columns(df) -> pd.DataFrame:
     df[MetaColumns.monoisotopic_mass] = [exact_mass_from_mol(mol) for mol in df["mol"]]
     df[MetaColumns.inchi] = [inchi_from_mol(mol) for mol in df["mol"]]
     df[MetaColumns.inchikey] = [inchikey_from_mol(mol) for mol in df["mol"]]
-    df[MetaColumns.split_inchikey] = [str(inchikey).split("-")[0] for inchikey in df['inchikey']]
+    df[MetaColumns.split_inchikey] = [split_inchikey(inchikey) for inchikey in df['inchikey']]
     df[MetaColumns.formula] = [formula_from_mol(mol) for mol in df["mol"]]
 
     # merge all smiles from isomeric_smiles>canonical_smiles>smiles

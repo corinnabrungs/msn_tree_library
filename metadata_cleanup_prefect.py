@@ -2,6 +2,8 @@ import logging
 
 from tqdm import tqdm
 import argparse
+
+import lotus_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description
@@ -97,14 +99,26 @@ def search_np_atlas_prefect(df):
     return search_np_atlas(df)
 
 
-@flow(name="Metadata cleanup",
-      version="0.1.0")
+@task(name="search lotus compound taxon links")
+def search_lotus_prefect(df):
+    return lotus_client.apply_search_on_split_inchikey(df)
+
+
+@flow(name="Add lotus", version="0.1.0", flow_run_name="{lib_id}:{metadata_file}")
+def add_lotus_flow(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
+    logging.info("Will run on %s", metadata_file)
+    df = extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header, well_header)
+    df = search_lotus_prefect(df)
+    save_results_prefect(df, metadata_file)
+
+
+@flow(name="Metadata cleanup", version="0.1.0", flow_run_name="{lib_id}:{metadata_file}")
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
                  query_pubchem_by_cid: bool = True,
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
-                 query_drugbank_list: bool = False, query_drugcentral: bool = False):
+                 query_drugbank_list: bool = False, query_drugcentral: bool = False, query_lotus: bool = False):
     logging.info("Will run on %s", metadata_file)
     df = extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header, well_header)
 
@@ -140,6 +154,9 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
 
     if query_npatlas:
         tasks.append(search_np_atlas_prefect.submit(df))
+
+    if query_lotus:
+        tasks.append(search_lotus_prefect.submit(df))
 
     # add new columns for cross references to other databases
     if query_unichem:

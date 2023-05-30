@@ -3,12 +3,14 @@ import logging
 import pandas as pd
 from tqdm import tqdm
 
+import lotus_client
 import unichem_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
+from lotus_client import apply_search_on_split_inchikey
 from meta_constants import MetaColumns
 from npatlas_client import search_np_atlas
 from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empty_strings, \
@@ -126,7 +128,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
-                 query_drugbank_list: bool = False, query_drugcentral: bool = False):
+                 query_drugbank_list: bool = False, query_drugcentral: bool = False, query_lotus: bool = False):
     logging.info("Will run on %s", metadata_file)
     df = extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
 
@@ -211,6 +213,9 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
         df = update_dataframes(result, df)
         save_intermediate_parquet(df, metadata_file)
 
+    if query_lotus:
+        df = lotus_client.apply_search_on_split_inchikey(df)
+
     # export metadata file
     save_results(df, metadata_file)
 
@@ -219,7 +224,7 @@ if __name__ == "__main__":
     cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test",
                  query_pubchem_by_name=True,
                  # need local files
-                 query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
+                 query_broad_list=True, query_drugbank_list=True, query_drugcentral=True, query_lotus=True)
     # cleanup_file("data\mce_library.tsv", id_columns=['Product Name', 'lib_plate_well', "inchikey"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
     # cleanup_file("data\gnpslib\gnps_library_small.csv", id_columns=['gnps_libid', "inchikey"], query_pubchem=True,
