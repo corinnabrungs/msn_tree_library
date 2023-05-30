@@ -37,14 +37,15 @@ def get_json_response_with_headers(url, headers, body, post=False):
     return None
 
 
-def json_col(result_df, json_column, suffix, field, apply_function=None, new_col_name=None):
+def json_col(result_df, json_column, prefix, field, apply_function=None, new_col_name=None):
     if new_col_name is None:
         new_col_name = field
+    full_column_name = f"{prefix}_{new_col_name}"
     if apply_function is None:
-        result_df[new_col_name + suffix] = [jo[field] if jo and field in jo else None for jo in json_column]
+        result_df[full_column_name] = [jo[field] if jo and field in jo else None for jo in json_column]
     else:
-        result_df[new_col_name + suffix] = [None if jo is None or field not in jo else apply_function(jo[field]) for jo
-                                            in json_column]
+        result_df[full_column_name] = [None if jo is None or field not in jo else apply_function(jo[field]) for jo
+                                       in json_column]
     return result_df
 
 

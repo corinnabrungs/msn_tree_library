@@ -65,9 +65,10 @@ EXTERNAL_IDS = {
     "drugbank_id": "i.id_type = 'DRUGBANK_ID' and i.identifier = '{}'",
     "chembl_id": "i.id_type = 'ChEMBL_ID' and i.identifier = '{}'",
     "pubchem_cid_parent": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
-    "inchi_key": "structures.inchikey = '{}'",
+    "pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
+    "inchikey": "structures.inchikey = '{}'",
     "compound_name": "lower(structures.name) ~ lower('{}')",
-    "split_inchi_key": "structures.inchikey ~ '^{}'",
+    "split_inchikey": "structures.inchikey ~ '^{}'",
 }
 
 conn = None
@@ -189,10 +190,10 @@ def drugcentral_postgresql(inchikey=None, split_inchikey=None):
 
         with conn.cursor() as cur:
             if inchikey:
-                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["inchi_key"].format(inchikey)))
+                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey)))
                 structure = cur.fetchone()
             if not structure and split_inchikey:
-                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["split_inchi_key"].format(split_inchikey)))
+                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["split_inchikey"].format(split_inchikey)))
                 structure = cur.fetchone()
             if not structure:
                 logging.info("NO Drugcentral match FOR: Inchikey:{} and split_inchikey:{}".format(inchikey, split_inchikey))

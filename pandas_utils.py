@@ -56,6 +56,8 @@ def save_dataframe(df, out_file):
     logging.info("Exporting to file %s", out_file)
     if out_file.endswith(".tsv"):
         df.to_csv(out_file, sep="\t", index=False)
+    elif out_file.endswith('.csv'):
+        df.to_csv(out_file, sep=",", index=False)
     elif out_file.endswith('.parquet'):
         df.to_parquet(out_file)
     elif out_file.endswith('.parquet.gz', '.parquet.gzip'):
@@ -98,13 +100,24 @@ def add_filename_suffix(filename, suffix, format_override=None):
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, file_format)
 
 
-def remove_empy_strings(df: pd.DataFrame, columns) -> pd.DataFrame:
+def remove_empty_strings(df: pd.DataFrame, columns) -> pd.DataFrame:
     if isinstance(columns, str):
         columns = [columns]
 
     for col in columns:
         if col in df.columns:
-            df[col] = [v if isinstance(v, str) and len(v) > 0 else None for v in df[col]]
+            df[col] = [None if isinstance(v, str) and len(v) == 0 else v for v in df[col]]
+
+    return df
+
+
+def remove_empty_lists_values(df: pd.DataFrame, columns) -> pd.DataFrame:
+    if isinstance(columns, str):
+        columns = [columns]
+
+    for col in columns:
+        if col in df.columns:
+            df[col] = [None if isinstance(v, list) and len(v) == 0 else v for v in df[col]]
 
     return df
 
@@ -150,3 +163,35 @@ def get_unique_dict(df, column):
     :return: dict(key, None)
     """
     return dict.fromkeys(df[column])
+
+
+def create_missing_columns(df: pd.DataFrame, required_cols):
+    if isinstance(required_cols, str):
+        required_cols = [required_cols]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None
+    return df
+
+
+def make_str_floor_to_int_number(df: pd.DataFrame, columns) -> pd.DataFrame:
+    """
+    Works in place. changes all input columns to str, splits at . and takes the first part to ensure integers.
+    "1.0" will be "1"
+    :param df: data frame input
+    :param columns: str or list of columns
+    :return: the input data frame
+    """
+    if isinstance(columns, str):
+        columns = [columns]
+    for col in columns:
+        df[col] = df[col].astype("str").str.split('.').str[0]
+    return df
+
+
+def divide_chunks(items, chunk_size):
+    """
+
+    :return: list of chunks of specified size
+    """
+    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]

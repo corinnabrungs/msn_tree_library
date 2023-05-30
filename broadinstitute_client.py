@@ -1,13 +1,17 @@
 import pandas as pd
 import logging
-from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
-from rdkit_mol_identifiers import split_inchikey
+
+from date_utils import iso_datetime_now
+from meta_constants import MetaColumns
 
 tqdm.pandas()
 
 
 def broad_list_search(df):
+    from rdkit_mol_identifiers import split_inchikey
+    from drug_utils import map_clinical_phase_to_number
+
     logging.info("Search broad institute list of drugs by first block of inchikey")
     # download from: https://clue.io/repurposing#download-data
     prefix = "broad_"
@@ -33,5 +37,7 @@ def broad_list_search(df):
     # Comparing the clinical phases, only store the highest number in clinical phase column
     merged_df["clinical_phase"] = merged_df[['broad_clinical_phase', 'clinical_phase', 'Clinical Information']].max(
         axis=1)
+
+    merged_df[MetaColumns.date_broad_drug_list] = iso_datetime_now()
     return merged_df.drop(columns=["broad_clinical_phase", "Clinical Information", "{}InChIKey".format(prefix)],
                           errors="ignore")

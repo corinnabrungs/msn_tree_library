@@ -7,12 +7,11 @@ import pubchempy
 from joblib import Memory
 from pubchempy import Compound, get_compounds
 
-import pandas_utils
-from date_utils import check_within_timedelta_from_now, create_expired_entries_dataframe, iso_datetime_now, \
-    set_date_if_notnull
+from date_utils import create_expired_entries_dataframe, iso_datetime_now
 from meta_constants import MetaColumns
-from pandas_utils import notnull, isnull, update_dataframes, get_or_else
+from pandas_utils import notnull, isnull, update_dataframes, get_or_else, make_str_floor_to_int_number
 from tqdm import tqdm
+from rdkit_mol_identifiers import ensure_smiles_column
 
 tqdm.pandas()
 
@@ -63,7 +62,8 @@ def pubchem_search_by_names(row) -> str | None:
 
 def transform_pubchem_columns(filtered: pd.DataFrame, apply_structures: bool) -> pd.DataFrame:
     from synonyms import get_first_synonym
-    filtered[MetaColumns.pubchem_cid] = [str(compound.cid) for compound in filtered["pubchem"]]
+    filtered[MetaColumns.pubchem_cid] = [compound.cid for compound in filtered["pubchem"]]
+    filtered = make_str_floor_to_int_number(filtered, MetaColumns.pubchem_cid)
     filtered[MetaColumns.pubchem_cid_parent] = filtered[MetaColumns.pubchem_cid]
     filtered[MetaColumns.compound_name] = [get_first_synonym(compound) for compound in filtered["pubchem"]]
     filtered[MetaColumns.iupac] = [compound.iupac_name for compound in filtered["pubchem"]]
@@ -77,8 +77,6 @@ def transform_pubchem_columns(filtered: pd.DataFrame, apply_structures: bool) ->
 
 
 def split_label_structure_sources(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
-    from metadata_cleanup import ensure_smiles_column
-
     input_smiles_df = df[df[MetaColumns.smiles].notnull()].copy()
 
     if len(input_smiles_df) > 0:
@@ -105,8 +103,7 @@ def pubchem_search_structure_by_cid(df: pd.DataFrame, apply_structures: bool,
 
     # only work on expired elements
     # define which rows are old or were not searched before
-    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_cid_search,
-                                                refresh_expired_entries_after)
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_cid_search, refresh_expired_entries_after)
 
     # some are filled from the name  or cid search
     filtered["pubchem"] = filtered.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
@@ -117,7 +114,7 @@ def pubchem_search_structure_by_cid(df: pd.DataFrame, apply_structures: bool,
     # transform create columns, do not copy structures as they are already cleaned by this script
     filtered = transform_pubchem_columns(filtered, apply_structures=apply_structures)
 
-    if not apply_structures:
+    if apply_structures:
         filtered = split_label_structure_sources(filtered, source_name="pubchem_cid")
 
     # combine new data with old rows that were not processed

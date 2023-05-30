@@ -3,14 +3,18 @@ import logging
 import numpy as np
 import pandas as pd
 from chembl_webresource_client.new_client import new_client as chembl
-from pandas_utils import notnull, isnull
+
+from date_utils import create_expired_entries_dataframe, iso_datetime_now
+from meta_constants import MetaColumns
+from pandas_utils import notnull, isnull, update_dataframes, make_str_floor_to_int_number
 from tqdm import tqdm
+import datetime as dt
 
 
 def get_chembl_mol(chembl_id=None, inchikey=None):
     try:
         if isnull(chembl_id) and isnull(inchikey):
-            raise ValueError("At least one chembl identifier needs to be a value")
+            return None
 
         if notnull(chembl_id):
             comp = chembl.molecule.get(chembl_id)
@@ -30,49 +34,51 @@ def get_chembl_mol(chembl_id=None, inchikey=None):
         return None
 
 
-def chembl_search_id_and_inchikey(df) -> pd.DataFrame:
+def chembl_search_id_and_inchikey(df,
+                                  refresh_expired_entries_after: dt.timedelta = dt.timedelta(days=90)) -> pd.DataFrame:
     logging.info("Search ChEMBL by chemblid or inchikey")
-    compounds = [get_chembl_mol(chembl_id, inchikey) for chembl_id, inchikey in
-                 tqdm(zip(df["chembl_id"], df["inchikey"]))]
+    if "chembl_id" not in df.columns:
+        df["chembl_id"] = None
 
-    df["chembl_id"] = [compound["molecule_chembl_id"] if notnull(compound) else np.NAN for compound in compounds]
-    # df["compound_name"] = df["compound_name"] + [compound["pref_name"] if notnull(compound) else np.NAN for
-    # compound in compounds]
-    df["molecular_species"] = [
-        compound["molecule_properties"]["molecular_species"] if notnull(compound) else np.NAN for compound in
-        compounds]
-    df["prodrug"] = [compound["prodrug"] if notnull(compound) else np.NAN for compound in compounds]
-    df["availability"] = [compound["availability_type"] if notnull(compound) else np.NAN for compound in compounds]
-    df["clinical_phase"] = [compound["max_phase"] if notnull(compound) else np.NAN for compound in compounds]
-    df["first_approval"] = pd.array(
-        [compound["first_approval"] if notnull(compound) else np.NAN for compound in compounds],
-        dtype=pd.Int64Dtype())
-    df["withdrawn"] = [compound["withdrawn_flag"] if notnull(compound) else np.NAN for compound in compounds]
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_chembl_search, refresh_expired_entries_after)
+
+    filtered["result_column"] = [get_chembl_mol(chembl_id, inchikey) for chembl_id, inchikey in
+                                 tqdm(zip(filtered["chembl_id"], filtered["inchikey"]))]
+    filtered = filtered[filtered["result_column"].notnull()].copy()
+    compounds = filtered["result_column"]
+    # refresh date
+    filtered[MetaColumns.date_chembl_search] = iso_datetime_now()
+
+    filtered["chembl_id"] = [compound["molecule_chembl_id"] for compound in compounds]
+    # filtered["compound_name"] = filtered["compound_name"] + [compound["pref_name"] for compound in compounds]
+    filtered["molecular_species"] = [compound["molecule_properties"]["molecular_species"] for compound in compounds]
+    filtered["prodrug"] = [compound["prodrug"] for compound in compounds]
+    filtered["availability"] = [compound["availability_type"] for compound in compounds]
+    filtered["clinical_phase"] = [compound["max_phase"] for compound in compounds]
+    filtered["withdrawn"] = [compound["withdrawn_flag"] for compound in compounds]
+    filtered[MetaColumns.first_approval] = pd.array([compound["first_approval"] for compound in compounds],
+                                                    dtype=pd.Int64Dtype())
+    filtered = make_str_floor_to_int_number(filtered, MetaColumns.first_approval)
     # was changed by ChEMBL api
-    # df["withdrawn_class"] = [compound["withdrawn_class"] if notnull(compound) else np.NAN for compound in
-    #                          compounds]
-    # df["withdrawn_reason"] = [compound["withdrawn_reason"] if notnull(compound) else np.NAN for compound in
-    #                           compounds]
-    # df["withdrawn_year"] = pd.array(
-    #     [compound["withdrawn_year"] if notnull(compound) else np.NAN for compound in compounds],
-    #     dtype=pd.Int64Dtype())
-    # df["withdrawn_country"] = [compound["withdrawn_country"] if notnull(compound) else np.NAN for compound in
-    #                            compounds]
-    df["oral"] = [compound["oral"] if notnull(compound) else np.NAN for compound in compounds]
-    df["parenteral"] = [compound["parenteral"] if notnull(compound) else np.NAN for compound in compounds]
-    df["topical"] = [compound["topical"] if notnull(compound) else np.NAN for compound in compounds]
-    df["natural_product"] = [compound["natural_product"] if notnull(compound) else np.NAN for compound in
-                             compounds]
-    df["usan_stem_definition"] = [compound["usan_stem_definition"] if notnull(compound) else np.NAN for compound
-                                  in compounds]
-    df["chembl_alogp"] = [compound["molecule_properties"]["alogp"] if notnull(compound) else np.NAN for compound
-                          in compounds]
-    df["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] if notnull(compound) else np.NAN for compound
-                          in compounds]
+    # filtered["withdrawn_class"] = [compound["withdrawn_class"] for compound in compounds]
+    # filtered["withdrawn_reason"] = [compound["withdrawn_reason"] for compound in compounds]
+    # filtered["withdrawn_year"] = pd.array([compound["withdrawn_year"] for compound in compounds], dtype=pd.Int64Dtype())
+    # filtered["withdrawn_country"] = [compound["withdrawn_country"] for compound in compounds]
+    filtered["oral"] = [compound["oral"] for compound in compounds]
+    filtered["parenteral"] = [compound["parenteral"] for compound in compounds]
+    filtered["topical"] = [compound["topical"] for compound in compounds]
+    filtered["natural_product"] = [compound["natural_product"] for compound in compounds]
+    filtered["usan_stem_definition"] = [compound["usan_stem_definition"] for compound in compounds]
+    filtered["chembl_alogp"] = [compound["molecule_properties"]["alogp"] for compound in compounds]
+    filtered["chembl_clogp"] = [compound["molecule_properties"]["cx_logp"] for compound in compounds]
 
     ## dont overwrite
-    # df["synonyms"] = df["synonyms"] + [compound["molecule_synonyms"] if notnull(compound) else [] for
+    # filtered["synonyms"] = filtered["synonyms"] + [compound["molecule_synonyms"] if notnull(compound) else [] for
     # compound in compounds]
-    df["indication"] = [compound["indication_class"] if notnull(compound) else np.NAN for compound in compounds]
+    filtered["indication"] = [compound["indication_class"] for compound in compounds]
+    filtered["atc_classifications"] = [compound["atc_classifications"] for compound in compounds]
 
-    return df
+    # combine new data with old rows that were not processed
+    return update_dataframes(filtered, df).drop(columns=["result_column"], errors="ignore")

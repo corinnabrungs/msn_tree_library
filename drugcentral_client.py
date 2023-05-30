@@ -1,7 +1,11 @@
 import logging
 import pandas as pd
 from tqdm import tqdm
-from pandas_utils import notnull
+
+import pandas_utils
+from date_utils import iso_datetime_now
+from meta_constants import MetaColumns
+from pandas_utils import notnull, update_dataframes
 
 import drugcentral_postgresql_query as drugcentral_query
 from rdkit_mol_identifiers import split_inchikey
@@ -29,8 +33,18 @@ def drugcentral_search(df):
         elements = len(columns)
         data = [row[1] if notnull(row[1]) else (None,) * elements for row in results]
         dc_df = pd.DataFrame(data=data, columns=columns, index=df.index)
+        # rename some columns
+        dc_df = dc_df.rename(columns={
+            'cas_reg_no': 'cas',
+            'name': 'compound_name',
+        })
+
         dc_df = dc_df.add_prefix(prefix)
-        df = pd.concat([df, dc_df], axis=1)
+
+        dc_df[MetaColumns.date_drugcentral_search] = iso_datetime_now()
+        df = update_dataframes(dc_df, df).copy()
+
+        pandas_utils.create_missing_columns(df, "clinical_phase")
 
         if "drugcentral_administration" in df.columns:
             df["drugcentral_administration_number"] = [4 if notnull(status) else None for status in
@@ -43,6 +57,8 @@ def drugcentral_search(df):
         else:
             df["any_phase"] = df["clinical_phase"] > 0
 
+        df = pandas_utils.make_str_floor_to_int_number(df, [
+            MetaColumns.clinical_phase, MetaColumns.drugcentral_id, "drugcentral_administration_number"])
         return df
     finally:
         drugcentral_query.deconnect()

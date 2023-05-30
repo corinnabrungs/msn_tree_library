@@ -67,11 +67,11 @@ def extraction_file(drugbank_file):
             food_interaction = ", ".join([interaction.text for interaction in food_interaction_node])
         except:
             pass
-
+        external_dict = {}
         try:
             external_identifiers_node = node.find("external-identifiers")
-            external = [from_xml_node(id_node, "identifier") for id_node in external_identifiers_node if
-                        from_xml_node(id_node, "resource") in resources]
+            external_dict = {from_xml_node(id_node, "resource"): from_xml_node(id_node, "identifier") for id_node in
+                             external_identifiers_node}
         except:
             pass
 
@@ -84,12 +84,11 @@ def extraction_file(drugbank_file):
         except:
             pass
 
-
         rows.append({"drugbank_id": from_xml_node(node, "drugbank-id"),
                      "compound_name": from_xml_node(node, "name"),
-                     "chembl_id": next(filter(lambda d: str(d).startswith("CHEMBL"), external), None),
+                     "chembl_id": external_dict.get("CHEMBL", None),
                      # currently we only extract pubchem and chembl, that's why this works (excluding chembl, only shows pubchem)
-                     "pubchem_cid": next(filter(lambda d: not str(d).startswith("CHEMBL"), external), None),
+                     "pubchem_cid": external_dict.get("PubChem Compound", None),
                      "cas": from_xml_node(node, "cas-number"),
                      "unii": from_xml_node(node, "unii"),
                      "smiles": smiles,

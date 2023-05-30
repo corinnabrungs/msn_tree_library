@@ -14,7 +14,7 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
 def chembl_availability(df) -> pd.DataFrame:
     compounds = [get_chembl_mol(chembl_id, inchi_key) for chembl_id, inchi_key in
-                 tqdm(zip(df["chembl_id"], df["inchi_key"]))]
+                 tqdm(zip(df["chembl_id"], df["inchikey"]))]
     df["availability"] = [compound["availability_type"] if notnull(compound) else np.NAN for compound in compounds]
     return df
 
@@ -27,7 +27,7 @@ def chemfont_search(df):
         results = df.progress_apply(lambda row: chemfont_query.chemfont_for_row(row), axis=1)
         # results = [drugcentral_query.drugcentral_for_row(row) for _,row in df.iterrows()]
         # results = [drugcentral_query.drugcentral_postgresql(inchikey, split_inchikey) for inchikey, split_inchikey in
-        #          tqdm(zip(df["inchi_key"], df["split_inchi_key"]))]
+        #          tqdm(zip(df["inchikey"], df["split_inchikey"]))]
         logging.info("DrugCentral search done")
 
         # row[1] is the data row[0] is the columns

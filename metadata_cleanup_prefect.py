@@ -1,18 +1,16 @@
 import logging
 
-from scipy.linalg import dft
 from tqdm import tqdm
 import argparse
-import unichem_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
-from meta_constants import MetaColumns
 from metadata_cleanup import extract_prepare_input_data, save_results, drop_duplicates_by_structure_rowid_reset_index, \
     search_all_unichem_xrefs, save_intermediate_parquet
-from pandas_utils import read_dataframe, add_filename_suffix, replace_format, save_dataframe, get_parquet_file
+from npatlas_client import search_np_atlas
+from pandas_utils import update_dataframes
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
     pubchem_search_structure_by_cid
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
@@ -23,11 +21,8 @@ from prefect import flow, task
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
-# CONSTANTS
-unique_sample_id_header = "unique_sample_id"
 
-
-@task(name="save results")
+@task(name="Extract prepare data")
 def extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
     return extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
 
@@ -35,6 +30,11 @@ def extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header="p
 @task(name="save results")
 def save_results_prefect(df, metadata_file):
     save_results(df, metadata_file)
+
+
+@task(name="save intermediate results")
+def save_intermediate_parquet_prefect(df, metadata_file):
+    save_intermediate_parquet(df, metadata_file)
 
 
 @task(name="PubChem by CID")
@@ -92,6 +92,11 @@ def apply_classyfire_prefect(df):
     return apply_classyfire(df)
 
 
+@task(name="apply_npatlas")
+def search_np_atlas_prefect(df):
+    return search_np_atlas(df)
+
+
 @flow(name="Metadata cleanup",
       version="0.1.0")
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
@@ -110,16 +115,16 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     if query_pubchem_by_name:
         df = pubchem_search_structure_by_name_prefect(df)
 
-    save_intermediate_parquet(df, metadata_file)
+    save_intermediate_parquet_prefect(df, metadata_file)
 
     # get mol from smiles or inchi
-    # calculate all identifiers from mol - exact_mass, ...
+    # calculate all identifiers from mol - monoisotopic_mass, ...
     if calc_identifiers:
         df = clean_structure_add_mol_id_columns_prefect(df)
 
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
     df = drop_duplicates_by_structure_rowid_reset_index(df)
-    save_intermediate_parquet(df, metadata_file)
+    save_intermediate_parquet_prefect(df, metadata_file)
 
     # structures are now fetched. Run things in parallel
     # run in parallel
@@ -133,16 +138,22 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     if query_classyfire:
         tasks.append(apply_classyfire_prefect.submit(df))
 
+    if query_npatlas:
+        tasks.append(search_np_atlas_prefect.submit(df))
+
     # add new columns for cross references to other databases
     if query_unichem:
         # xrefs are needed for other steps so run sequential here
         df = search_all_unichem_xrefs_prefect(df, metadata_file)
+        save_intermediate_parquet_prefect(df, metadata_file)
 
     if query_pubchem_by_cid:
         df = pubchem_search_structure_by_cid_prefect(df, apply_structures=False)
+        save_intermediate_parquet_prefect(df, metadata_file)
 
     if query_pubchem_by_structure:
         df = pubchem_search_by_structure_prefect(df)
+        save_intermediate_parquet_prefect(df, metadata_file)
 
     # extract ids like the UNII, ...
     df = ensure_synonyms_column(df)
@@ -150,6 +161,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
 
     if query_chembl:
         df = chembl_search_id_and_inchikey_prefect(df)
+        save_intermediate_parquet_prefect(df, metadata_file)
 
     if query_broad_list:
         df = broad_list_search_prefect(df)
@@ -168,15 +180,21 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     df["none"] = df.isnull().sum(axis=1)
     try:
         df = df.sort_values(by="none", ascending=True).drop_duplicates(
-            ["inchikey", "exact_mass", "row_id"], keep="first").sort_index()
+            ["inchikey", "monoisotopic_mass", "row_id"], keep="first").sort_index()
     except:
         pass
 
-    # wait for all tasks in parallel to finish
-    result_dfs = [task.result() for task in tasks]
+    # # wait for all tasks in parallel to finish
+    for task in tasks:
+        # get results and merge into
+        result_df = task.result()
+        df = update_dataframes(result_df, df)
+
+    # result_dfs = [task.result() for task in tasks]
+    # df = df.join(result_dfs, sort=False)
 
     # export metadata file
-    save_results_prefect(df)
+    save_results_prefect(df.copy(), metadata_file)
 
 
 def full_cleanup_file(metadata_file, lib_id, flow_run_name=None):

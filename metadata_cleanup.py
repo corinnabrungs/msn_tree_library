@@ -10,18 +10,17 @@ from drug_utils import get_clinical_phase_description
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
 from meta_constants import MetaColumns
-from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empy_strings
+from npatlas_client import search_np_atlas
+from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empty_strings, \
+    update_dataframes
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
     pubchem_search_structure_by_cid
-from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
+from rdkit_mol_identifiers import clean_structure_add_mol_id_columns, ensure_smiles_column
 from structure_classifier_client import apply_np_classifier, apply_classyfire
 from synonyms import ensure_synonyms_column, extract_synonym_ids
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
-
-# CONSTANTS
-unique_sample_id_header = "unique_sample_id"
 
 
 def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
@@ -53,7 +52,7 @@ def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id"
 
         # apply this here to ensure that structures given as inchi are also present as smiles
         # get mol from smiles or inchi
-        # calculate all identifiers from mol - exact_mass, ...
+        # calculate all identifiers from mol - monoisotopic_mass, ...
         df = clean_structure_add_mol_id_columns(df, drop_mol=True)
 
         df.loc[
@@ -63,34 +62,6 @@ def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id"
         logging.info("Writing prepared metadata file to " + out_file)
         df.to_parquet(out_file)
         return df
-
-
-def ensure_smiles_column(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure presence of smiles column, remove empty strings, and fill all none with smiles in
-    isomeric_smiles>canonical_smiles>smiles
-    """
-    if "inchi" not in df.columns:
-        df["inchi"] = None
-    if "isomerical_smiles" in df.columns:
-        df = df.rename(columns={"isomerical_smiles": MetaColumns.isomeric_smiles})
-
-    # ensure smiles column by priority
-    cols = [MetaColumns.isomeric_smiles, MetaColumns.canonical_smiles, MetaColumns.smiles, "SMILES", "Smiles"]
-    df = remove_empy_strings(df, cols)
-
-    for col in cols:
-        if col in df.columns:
-            df[MetaColumns.smiles] = df[col]
-            break
-    if MetaColumns.smiles not in df.columns:
-        df[MetaColumns.smiles] = None
-
-    # fill NA values by priority
-    for col in cols[1:]:
-        if col in df.columns:
-            df[MetaColumns.smiles] = df[MetaColumns.smiles].fillna(df[col])
-    return df
 
 
 def save_intermediate_parquet(df, metadata_file):
@@ -105,8 +76,8 @@ def save_results(df, metadata_file):
     """
     Overwrite parquet file and create cleaned metadata file as tsv or csv (depending on input)
     """
-    save_intermediate_parquet(df, metadata_file)
     save_dataframe(df, add_filename_suffix(metadata_file, "cleaned"))
+    save_intermediate_parquet(df, metadata_file)
 
 
 def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
@@ -121,10 +92,10 @@ def create_unique_sample_id_column(df, lib_id, plate_id_header, well_header):
     try:
         if well_header in df.columns:
             if plate_id_header in df.columns:
-                df[unique_sample_id_header] = ["{}_{}_{}_id".format(lib_id, plate, well) for plate, well in
-                                               zip(df[plate_id_header], df[well_header])]
+                df[MetaColumns.unique_sample_id] = ["{}_{}_{}_id".format(lib_id, plate, well) for plate, well in
+                                                    zip(df[plate_id_header], df[well_header])]
             else:
-                df[unique_sample_id_header] = ["{}_{}_id".format(lib_id, well) for well in df[well_header]]
+                df[MetaColumns.unique_sample_id] = ["{}_{}_id".format(lib_id, well) for well in df[well_header]]
     except:
         logging.info(
             "No well location and plate id found to construct unique ID which is needed for library generation")
@@ -169,7 +140,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     save_intermediate_parquet(df, metadata_file)
 
     # get mol from smiles or inchi
-    # calculate all identifiers from mol - exact_mass, ...
+    # calculate all identifiers from mol - monoisotopic_mass, ...
     if calc_identifiers:
         df = clean_structure_add_mol_id_columns(df, drop_mol=True)
 
@@ -219,18 +190,25 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     df["none"] = df.isnull().sum(axis=1)
     try:
         df = df.sort_values(by="none", ascending=True).drop_duplicates(
-            ["inchikey", "exact_mass", "row_id"], keep="first").sort_index()
+            ["inchikey", "monoisotopic_mass", "row_id"], keep="first").sort_index()
     except:
         pass
 
     # GNPS cached version
     if query_npclassifier:
-        df = apply_np_classifier(df)
+        result = apply_np_classifier(df)
+        df = update_dataframes(result, df)
         save_intermediate_parquet(df, metadata_file)
 
     # GNPS cached version
     if query_classyfire:
-        df = apply_classyfire(df)
+        result = apply_classyfire(df)
+        df = update_dataframes(result, df)
+        save_intermediate_parquet(df, metadata_file)
+
+    if query_npatlas:
+        result = search_np_atlas(df)
+        df = update_dataframes(result, df)
         save_intermediate_parquet(df, metadata_file)
 
     # export metadata file

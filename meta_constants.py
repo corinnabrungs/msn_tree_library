@@ -21,8 +21,11 @@ class MetaColumns(StrEnum):
     structure_source = auto()
 
     # sample sequence specific
+    filename = auto()  # usually generated in sequence creation
+    unique_sample_id = auto()  # generated from plate_id and well_location and a library id
     well_location = auto()
     plate_id = auto()
+    library_id = auto()
     # calculated properties
     monoisotopic_mass = auto()
     # compound specific
@@ -31,12 +34,15 @@ class MetaColumns(StrEnum):
     synonyms = auto()
     formula = auto()
     smiles = auto()  # input smiles but should be cleaned to canonical_smiles
+    smarts = auto()
     inchi = auto()
     inchikey = auto()
+    split_inchikey = auto()
     canonical_smiles = auto()
     isomeric_smiles = auto()
     iupac = auto()
     # drugs
+    first_approval = auto()
     clinical_phase = auto()
     approval_withdrawn = auto()
     target = auto()
