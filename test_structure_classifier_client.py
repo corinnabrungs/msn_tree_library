@@ -14,7 +14,7 @@ class Test(TestCase):
         }])
         df = structure_classifier_client.apply_classyfire(df)
 
-        new_cols = [col for col in df.columns if structure_classifier_client.CLASSYFIRE_SUFFIX in col]
+        new_cols = [col for col in df.columns if structure_classifier_client.CLASSYFIRE_PREFIX in col]
         assert len(new_cols) > 2
 
     def test_apply_np_classifier(self):
@@ -25,5 +25,5 @@ class Test(TestCase):
         }])
         df = structure_classifier_client.apply_np_classifier(df)
 
-        new_cols = [col for col in df.columns if structure_classifier_client.NP_CLASSIFIER_SUFFIX in col]
+        new_cols = [col for col in df.columns if structure_classifier_client.NP_CLASSIFIER_PREFIX in col]
         assert len(new_cols) > 2

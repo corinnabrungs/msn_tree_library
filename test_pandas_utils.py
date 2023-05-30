@@ -12,7 +12,7 @@ class Test(TestCase):
                 "col": [None, "", "sads"]
             }
         )
-        df = pandas_utils.remove_empy_strings(df, columns="col")
+        df = pandas_utils.remove_empty_strings(df, columns="col")
         assert df is not None
         assert len(df[df["col"].isnull()]) == 2
         assert df.at[1, "col"] is None
