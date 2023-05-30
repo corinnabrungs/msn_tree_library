@@ -243,4 +243,4 @@ def download_lotus_prefect():
 
 
 if __name__ == '__main__':
-    download_lotus_prefect(flow_run_name="dump lotus run")
+    download_lotus_prefect()

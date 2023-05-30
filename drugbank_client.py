@@ -7,7 +7,7 @@ from date_utils import iso_datetime_now
 from meta_constants import MetaColumns
 from rdkit_mol_identifiers import split_inchikey
 from pandas_utils import isnull, notnull, create_missing_columns, combine_dfs_fill_missing_values, \
-    make_str_floor_to_int_number
+    make_str_floor_to_int_number, update_dataframes, add_column_prefix
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -65,19 +65,21 @@ def drugbank_list_search(df: pd.DataFrame):
     # TODO check issue that sometimes we get series not hashable exception
     df["drugbank_id"] = [did if isinstance(did, str) else None for did in df["drugbank_id"]]
 
-    drugbank_df = drugbank_df.add_prefix(prefix)
-    merged_df = pd.merge(df, drugbank_df, left_on="drugbank_id", right_on="drugbank_drugbank_id", how="left")
+    # only merge on id column where id is notnull
+    results = df[[MetaColumns.drugbank_id]][df[MetaColumns.drugbank_id].notnull()].copy()
+    results = results.merge(drugbank_df, on="drugbank_id", how="left")
+    results = results.drop(
+        columns=["inchikey", "smiles", "inchi", MetaColumns.isomeric_smiles, MetaColumns.canonical_smiles,
+                 "split_inchikey"], errors="ignore")
+
+    # rename only a few columns with prefix
+    results = add_column_prefix(results, prefix,
+                                columns_to_keep=[
+                                    "unii", "chembl_id", "pubchem_cid", "compound_name", "cas", MetaColumns.drugbank_id
+                                ])
 
     # fill NA values in original data with drugbank data
-    filldf = merged_df[
-        ["drugbank_unii", "drugbank_chembl_id", "drugbank_pubchem_cid", "drugbank_compound_name", "drugbank_inchikey",
-         "drugbank_split_inchikey", "drugbank_cas"]].copy()
-    filldf.columns = filldf.columns.str.removeprefix(prefix)
-    merged_df = combine_dfs_fill_missing_values(merged_df, filldf)
-
-    return merged_df.drop(
-        columns=["drugbank_drugbank_id", "{}inchikey".format(prefix), "{}smiles".format(prefix), f"{prefix}unii",
-                 f"{prefix}chembl_id", "{}split_inchikey".format(prefix)], errors="ignore")
+    return update_dataframes(results, df)
 
 
 def drugbank_search_add_columns(df):

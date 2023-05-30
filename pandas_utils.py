@@ -100,6 +100,27 @@ def add_filename_suffix(filename, suffix, format_override=None):
     return "{0}_{1}{2}".format(Path.joinpath(p.parent, p.stem), suffix, file_format)
 
 
+def add_column_prefix(df: pd.DataFrame, prefix: str, columns_to_rename=None, columns_to_keep=None) -> pd.DataFrame:
+    """
+    Add prefix to all columns in "to rename" but never to those in "to keep"
+    :param df: dataframe
+    :param prefix: prefix+old column name
+    :return: the input df
+    """
+    if columns_to_rename is None:
+        columns_to_rename = df.columns
+    if isinstance(columns_to_rename, str):
+        columns_to_rename = [columns_to_rename]
+
+    if columns_to_keep is None:
+        columns_to_keep = []
+    if isinstance(columns_to_keep, str):
+        columns_to_keep = [columns_to_keep]
+
+    df.columns = [col if col in columns_to_keep else prefix + col for col in columns_to_rename]
+    return df
+
+
 def remove_empty_strings(df: pd.DataFrame, columns) -> pd.DataFrame:
     if isinstance(columns, str):
         columns = [columns]

@@ -105,6 +105,9 @@ def pubchem_search_structure_by_cid(df: pd.DataFrame, apply_structures: bool,
     # define which rows are old or were not searched before
     filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_cid_search, refresh_expired_entries_after)
 
+    if len(filtered) == 0:  # no need to update
+        return df
+
     # some are filled from the name  or cid search
     filtered["pubchem"] = filtered.progress_apply(lambda row: pubchem_search_by_cid(row), axis=1)
     filtered = filtered[filtered["pubchem"].notnull()].copy()
@@ -132,6 +135,9 @@ def pubchem_search_structure_by_name(df: pd.DataFrame, refresh_expired_entries_a
     # only work on expired elements
     # define which rows are old or were not searched before
     filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_name_search, refresh_expired_entries_after)
+
+    if len(filtered) == 0:  # no need to update
+        return df
 
     # apply search but limit to those without pubchem results from CID search
     filtered = filtered[filtered["pubchem"].isnull()].copy()
@@ -161,6 +167,8 @@ def pubchem_search_by_structure(df: pd.DataFrame,
     # define which rows are old or were not searched before
     filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_structure_search,
                                                 refresh_expired_entries_after)
+    if len(filtered) == 0:  # no need to update
+        return df
 
     filtered = filtered[filtered["pubchem"].isnull()].copy()
     filtered["pubchem"] = [search_pubchem_by_structure(smiles, inchi, inchikey) for
