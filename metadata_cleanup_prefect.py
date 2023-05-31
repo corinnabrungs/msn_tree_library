@@ -214,11 +214,11 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     save_results_prefect(df.copy(), metadata_file)
 
 
-def full_cleanup_file(metadata_file, lib_id, flow_run_name=None):
+def full_cleanup_file(metadata_file, lib_id):
     try:
         cleanup_file(metadata_file, lib_id, query_pubchem_by_name=True,
                      # need local files
-                     query_broad_list=True, query_drugbank_list=True, query_drugcentral=True
+                     query_broad_list=True, query_drugbank_list=True, query_drugcentral=True, query_lotus=True
                      )
     except:
         logging.exception("Exception in flow")

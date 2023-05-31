@@ -7,7 +7,7 @@ from date_utils import iso_datetime_now
 from meta_constants import MetaColumns
 from rdkit_mol_identifiers import split_inchikey
 from pandas_utils import isnull, notnull, create_missing_columns, combine_dfs_fill_missing_values, \
-    make_str_floor_to_int_number, update_dataframes, add_column_prefix
+    make_str_floor_to_int_number, update_dataframes, add_column_prefix, left_merge_retain_index
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -67,7 +67,10 @@ def drugbank_list_search(df: pd.DataFrame):
 
     # only merge on id column where id is notnull
     results = df[[MetaColumns.drugbank_id]][df[MetaColumns.drugbank_id].notnull()].copy()
-    results = results.merge(drugbank_df, on="drugbank_id", how="left")
+    if len(results) == 0:
+        return df
+
+    results = left_merge_retain_index(results, drugbank_df, on=MetaColumns.drugbank_id)
     results = results.drop(
         columns=["inchikey", "smiles", "inchi", MetaColumns.isomeric_smiles, MetaColumns.canonical_smiles,
                  "split_inchikey"], errors="ignore")

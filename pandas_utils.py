@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
+from pandas._typing import IndexLabel
 
 
 def isnull(o):
@@ -60,7 +61,7 @@ def save_dataframe(df, out_file):
         df.to_csv(out_file, sep=",", index=False)
     elif out_file.endswith('.parquet'):
         df.to_parquet(out_file)
-    elif out_file.endswith('.parquet.gz', '.parquet.gzip'):
+    elif out_file.endswith('.parquet.gz') or out_file.endswith('.parquet.gzip'):
         df.to_parquet(out_file, compression='gzip')
     elif out_file.endswith('.feather'):
         df.to_feather(out_file)
@@ -181,6 +182,18 @@ def combine_dfs_fill_missing_values(target: pd.DataFrame, source: pd.DataFrame) 
     :return: the filled dataframe
     """
     return target.combine_first(source)  # alternative df.combine_first
+
+
+def left_merge_retain_index(main_index_df: pd.DataFrame, other_df: pd.DataFrame,
+                            on: IndexLabel | None = None) -> pd.DataFrame:
+    """
+    Merge other_df into main_df with left join and keep main_df.index
+    :param main_index_df: provides index
+    :param other_df: is merged into main
+    :param on: columns, or if none use index
+    :return: merged frame
+    """
+    return main_index_df.merge(other_df, how="left", sort=False, on=on).set_index(main_index_df.index)
 
 
 def get_first_value_or_else(df: pd.DataFrame, column: str, default=None):

@@ -1,11 +1,14 @@
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum, auto
 from strenum import StrEnum
 
 import pandas as pd
 
-from pandas_utils import get_first_value_or_else
+from date_utils import create_expired_entries_dataframe
+from meta_constants import MetaColumns
+from pandas_utils import get_first_value_or_else, update_dataframes, save_dataframe, read_dataframe
 from rest_utils import get_json_response_with_headers
 from joblib import Memory
 
@@ -83,6 +86,11 @@ def search_unichem_xref(structure: str, search_type="inchikey") -> None | dict:
 
 
 def search_unichem_xref_for_row(row) -> pd.DataFrame:
+    """
+    Maybe multiple matches as rows
+    :param row:
+    :return:
+    """
     # try inchikey - otherwise smiles
     result = search_unichem_xref(row["inchikey"], "inchikey")
 
@@ -103,15 +111,24 @@ def search_unichem_xref_for_row(row) -> pd.DataFrame:
         )
 
 
-def search_all_xrefs(df) -> pd.DataFrame:
+def search_all_xrefs(df: pd.DataFrame, refresh_expired_entries_after: timedelta = timedelta(days=90)) -> pd.DataFrame:
     """
 
     :param df: requires columns inchikey
     :return: a new data frame with all xrefs and their inchikey (input)
     """
     logging.info("Running uni chem search for cross references")
-    unichem_results = pd.concat(df.apply(lambda row: search_unichem_xref_for_row(row), axis=1).array)
+
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_unichem_search, refresh_expired_entries_after)
+
+    if len(filtered) == 0:  # no need to update
+        return pd.DataFrame()  # return empty dataframe
+
+    unichem_results = pd.concat(filtered.apply(lambda row: search_unichem_xref_for_row(row), axis=1).array)
     unichem_results = unichem_results.drop_duplicates().reset_index(drop=True)
+
     return unichem_results
 
 
@@ -122,14 +139,15 @@ def extract_ids_to_columns(unichem_df: pd.DataFrame, target_df: pd.DataFrame) ->
     :param target_df: metadata contains inchikey and this function adds new columns
     :return: the metadata target_df
     """
+    results = target_df[[MetaColumns.inchikey]].copy()
     for source in Sources:
         col_name = source.column_name
-        target_df[col_name] = [get_compoundid(unichem_df, inchikey, source) for inchikey in target_df["inchikey"]]
+        results[col_name] = [get_compoundid(unichem_df, inchikey, source) for inchikey in results[MetaColumns.inchikey]]
 
     unichem_url = Sources.unichem_source.shortname + "_url"
-    target_df[unichem_url] = [get_unichem_url(unichem_df, inchikey) for inchikey in target_df["inchikey"]]
+    results[unichem_url] = [get_unichem_url(unichem_df, inchikey) for inchikey in results[MetaColumns.inchikey]]
 
-    return target_df
+    return update_dataframes(results, target_df)
 
 
 def get_unichem_url(unichem_df: pd.DataFrame, inchikey: str) -> str | None:
@@ -154,5 +172,14 @@ def _get_first_value(unichem_df: pd.DataFrame, inchikey: str, source: Source, ex
 
 def save_unichem_df(base_file, df: pd.DataFrame):
     from pandas_utils import add_filename_suffix
-    df.to_csv(add_filename_suffix(base_file, "unichem", ".csv"), index=False)
-    df.to_parquet(add_filename_suffix(base_file, "unichem", ".parquet.gzip"), compression='gzip')
+    parquet_file = add_filename_suffix(base_file, "unichem", ".parquet.gzip")
+    # try read old results and only replace new ones
+    try:
+        old = read_dataframe(parquet_file).set_index(MetaColumns.unichem_id)
+        df = df.set_index(MetaColumns.unichem_id)
+        df = update_dataframes(df, old).reset_index()
+    except:
+        logging.info("No unichem file found - creating a new one at " + parquet_file)
+
+    save_dataframe(df, add_filename_suffix(base_file, "unichem", ".csv"))
+    save_dataframe(df, parquet_file)

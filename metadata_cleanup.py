@@ -118,6 +118,9 @@ def search_all_unichem_xrefs(df, metadata_file):
     Search unichem, save to file, add id columns to dataframe
     """
     unichem_df = unichem_client.search_all_xrefs(df)
+    if unichem_df is None or len(unichem_df) == 0:
+        return df
+
     unichem_client.save_unichem_df(metadata_file, unichem_df)
     df = unichem_client.extract_ids_to_columns(unichem_df, df)
     return df
