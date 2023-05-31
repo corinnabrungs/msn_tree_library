@@ -25,8 +25,9 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
 
 @task(name="Extract prepare data")
-def extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
-    return extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
+def extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                                       use_cached_parquet_file: bool = True):
+    return extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header, use_cached_parquet_file)
 
 
 @task(name="save results")
@@ -114,13 +115,15 @@ def add_lotus_flow(metadata_file, lib_id, plate_id_header="plate_id", well_heade
 
 @flow(name="Metadata cleanup", version="0.1.0", flow_run_name="{lib_id}:{metadata_file}")
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                 use_cached_parquet_file: bool = True,
                  query_pubchem_by_cid: bool = True,
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
                  query_drugbank_list: bool = False, query_drugcentral: bool = False, query_lotus: bool = False):
     logging.info("Will run on %s", metadata_file)
-    df = extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header, well_header)
+    df = extract_prepare_input_data_prefect(metadata_file, lib_id, plate_id_header, well_header,
+                                            use_cached_parquet_file)
 
     if query_pubchem_by_cid:
         df = pubchem_search_structure_by_cid_prefect(df, apply_structures=True)
@@ -214,9 +217,9 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     save_results_prefect(df.copy(), metadata_file)
 
 
-def full_cleanup_file(metadata_file, lib_id):
+def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = True):
     try:
-        cleanup_file(metadata_file, lib_id, query_pubchem_by_name=True,
+        cleanup_file(metadata_file, lib_id, use_cached_parquet_file=use_cached_parquet_file, query_pubchem_by_name=True,
                      # need local files
                      query_broad_list=True, query_drugbank_list=True, query_drugcentral=True, query_lotus=True
                      )

@@ -5,7 +5,8 @@ from tqdm import tqdm
 import pandas_utils
 from date_utils import iso_datetime_now
 from meta_constants import MetaColumns
-from pandas_utils import left_merge_retain_index, add_column_prefix, update_dataframes, create_missing_columns
+from pandas_utils import left_merge_retain_index, add_column_prefix, update_dataframes, create_missing_columns, \
+    read_dataframe
 
 tqdm.pandas()
 
@@ -24,10 +25,13 @@ def broad_list_search(df):
     logging.info("Search broad institute list of drugs by first block of inchikey")
     # download from: https://clue.io/repurposing#download-data
     prefix = "broad_"
-    broad_df = pd.read_csv("data/broad_institute_drug_list.csv")
+    broad_df = read_dataframe("data/broad_institute_drug_list.csv")
 
     broad_df[MetaColumns.split_inchikey] = [split_inchikey(inchikey) for inchikey in broad_df["InChIKey"]]
     broad_df = broad_df.drop(columns=["InChIKey"])
+
+    # need unique split_inchikey rows for broad to merge later
+    broad_df = broad_df.drop_duplicates(subset=MetaColumns.split_inchikey)
 
     results = left_merge_retain_index(results, broad_df, on=MetaColumns.split_inchikey)
     results = add_column_prefix(results, prefix, columns_to_keep=MetaColumns.split_inchikey)

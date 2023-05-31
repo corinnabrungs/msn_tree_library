@@ -13,10 +13,10 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 files_and_lib_ids = [
-    # (r"data\library\mce_library.tsv", "pluskal_mce"),
-    # (r"data\library\mce_library_add_compounds.tsv", "pluskal_mce"),
-    (r"examples\test_metadata.tsv", "test"),
+    # (r"examples\test_metadata.tsv", "test"),
     # (r"examples\test_metadata_small.tsv", "test"),
+    (r"data\library\mce_library.tsv", "pluskal_mce"),
+    # (r"data\library\mce_library_add_compounds.tsv", "pluskal_mce"),
     # (r"data\nih\nih_library_test.csv", "pluskal_nih"),
     # (r"data\nih\nih_library_new_headers.tsv", "pluskal_nih"),
 ]
@@ -25,7 +25,8 @@ if __name__ == "__main__":
     import subprocess
 
     for input_file, lib_id in files_and_lib_ids:
-        metadata_cleanup_prefect.full_cleanup_file(input_file, lib_id)
+        # use_cached_parquet_file = False cleans up the parquet files - use True instead
+        metadata_cleanup_prefect.full_cleanup_file(input_file, lib_id, use_cached_parquet_file=False)
         # metadata_cleanup_prefect.add_lotus_flow(input_file, lib_id)
 
         # cmd = f"python metadata_cleanup_prefect.py {input_file} --lib_id {lib_id}"

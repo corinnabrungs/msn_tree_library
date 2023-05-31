@@ -25,7 +25,8 @@ tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 
 
-def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location"):
+def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                               use_cached_parquet_file: bool = True):
     """
     Load prepared metadata file from parquet or if not present prepare metadata file. Creates a row_id column to later
     align results with
@@ -33,37 +34,43 @@ def extract_prepare_input_data(metadata_file, lib_id, plate_id_header="plate_id"
     :param lib_id: library id unique description
     :param plate_id_header: header for plate_id
     :param well_header: header for well location
+    :param use_cached_parquet_file: True, try to load a parquet file with intermediate results. Otherwise overwrite this file
     :return:
     """
     out_file = get_parquet_file(metadata_file)
-    try:
-        df = read_dataframe(out_file)
-        logging.info("Loaded prepared metadata file from " + out_file)
-        return df
-    except:
-        logging.info("Preparing metadata file " + metadata_file)
-        df = read_dataframe(metadata_file)
-        create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
-        # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
-        df["row_id"] = df.reset_index().index
-        # ensure compound_name is saved to input_name if this is not defined yet
-        if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
-            df[MetaColumns.input_name] = df[MetaColumns.compound_name]
+    if use_cached_parquet_file:
+        try:
+            df = read_dataframe(out_file)
+            logging.info("Loaded prepared metadata file from " + out_file)
+            return df
+        except:
+            logging.info("No cached parquet file found - will load original file")
+            pass
 
-        ensure_smiles_column(df)
+    # load original data
+    logging.info("Preparing metadata file " + metadata_file)
+    df = read_dataframe(metadata_file)
+    create_unique_sample_id_column(df, lib_id, plate_id_header, well_header)
+    # needed as we are going to duplicate some rows if there is conflicting information, e.g., the structure in PubChem
+    df["row_id"] = df.reset_index().index
+    # ensure compound_name is saved to input_name if this is not defined yet
+    if MetaColumns.input_name not in df.columns and MetaColumns.compound_name in df.columns:
+        df[MetaColumns.input_name] = df[MetaColumns.compound_name]
 
-        # apply this here to ensure that structures given as inchi are also present as smiles
-        # get mol from smiles or inchi
-        # calculate all identifiers from mol - monoisotopic_mass, ...
-        df = clean_structure_add_mol_id_columns(df, drop_mol=True)
+    ensure_smiles_column(df)
 
-        df.loc[
-            df[MetaColumns.smiles].notnull() | df[MetaColumns.inchi].notnull(), MetaColumns.structure_source] = "input"
+    # apply this here to ensure that structures given as inchi are also present as smiles
+    # get mol from smiles or inchi
+    # calculate all identifiers from mol - monoisotopic_mass, ...
+    df = clean_structure_add_mol_id_columns(df, drop_mol=True)
 
-        df = ensure_synonyms_column(df)
-        logging.info("Writing prepared metadata file to " + out_file)
-        df.to_parquet(out_file)
-        return df
+    df.loc[
+        df[MetaColumns.smiles].notnull() | df[MetaColumns.inchi].notnull(), MetaColumns.structure_source] = "input"
+
+    df = ensure_synonyms_column(df)
+    logging.info("Writing prepared metadata file to " + out_file)
+    df.to_parquet(out_file)
+    return df
 
 
 def save_intermediate_parquet(df, metadata_file):
@@ -127,13 +134,14 @@ def search_all_unichem_xrefs(df, metadata_file):
 
 
 def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header="well_location",
+                 use_cached_parquet_file: bool = True,
                  query_pubchem_by_cid: bool = True,
                  query_pubchem_by_name: bool = True, calc_identifiers: bool = True, query_unichem: bool = True,
                  query_pubchem_by_structure: bool = True, query_chembl: bool = True, query_npclassifier: bool = True,
                  query_classyfire: bool = True, query_npatlas: bool = True, query_broad_list: bool = False,
                  query_drugbank_list: bool = False, query_drugcentral: bool = False, query_lotus: bool = False):
     logging.info("Will run on %s", metadata_file)
-    df = extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header)
+    df = extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header, use_cached_parquet_file)
 
     if query_pubchem_by_cid:
         df = pubchem_search_structure_by_cid(df, apply_structures=True)
@@ -225,6 +233,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
 
 if __name__ == "__main__":
     cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test",
+                 use_cached_parquet_file=True,
                  query_pubchem_by_name=True,
                  # need local files
                  query_broad_list=True, query_drugbank_list=True, query_drugcentral=True, query_lotus=True)
