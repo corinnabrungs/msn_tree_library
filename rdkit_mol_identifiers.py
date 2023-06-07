@@ -75,7 +75,7 @@ def split_smiles_major_mol(smiles):
         return split_smiles[0]
 
 
-def split_inchikey(inchikey):
+def split_inchikey(inchikey: str | None) -> str | None:
     return str(inchikey).split("-")[0] if notnull(inchikey) else None
 
 
