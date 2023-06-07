@@ -122,6 +122,13 @@ def add_column_prefix(df: pd.DataFrame, prefix: str, columns_to_rename=None, col
     return df
 
 
+def remove_line_breaks(value: str | None, replace_str: str = " ") -> str | None:
+    if isinstance(value, str):
+        return value.replace("\n", replace_str).replace("\r", "")
+    else:
+        return value
+
+
 def remove_empty_strings(df: pd.DataFrame, columns) -> pd.DataFrame:
     if isinstance(columns, str):
         columns = [columns]

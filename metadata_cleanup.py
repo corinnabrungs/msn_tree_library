@@ -14,7 +14,7 @@ from lotus_client import apply_search_on_split_inchikey
 from meta_constants import MetaColumns
 from npatlas_client import search_np_atlas
 from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empty_strings, \
-    update_dataframes
+    update_dataframes, remove_line_breaks
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
     pubchem_search_structure_by_cid
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns, ensure_smiles_column
@@ -85,6 +85,7 @@ def save_results(df, metadata_file):
     """
     Overwrite parquet file and create cleaned metadata file as tsv or csv (depending on input)
     """
+    df = df.apply(lambda v: remove_line_breaks(v))
     save_dataframe(df, add_filename_suffix(metadata_file, "cleaned"))
     save_intermediate_parquet(df, metadata_file)
 
