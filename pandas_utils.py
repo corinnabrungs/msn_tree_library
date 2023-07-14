@@ -207,6 +207,10 @@ def get_first_value_or_else(df: pd.DataFrame, column: str, default=None):
     return next((v for v in df[column]), default)
 
 
+def get_first_or_else(collection, default=None):
+    return next((v for v in collection), default)
+
+
 def get_or_else(row, key, default=None):
     return row[key] if key in row and notnull(row[key]) else default
 
@@ -252,9 +256,41 @@ def make_str_floor_to_int_number(df: pd.DataFrame, columns) -> pd.DataFrame:
     return df
 
 
+def divide_n_chunks(items, n):
+    """
+    divide series or dataframe into n chunks
+    :param n: number of chunks
+    :return: list of items split into n chunks
+    """
+    import math
+    return divide_chunks(items, math.ceil(len(items) / n))
+
+
 def divide_chunks(items, chunk_size):
     """
-
     :return: list of chunks of specified size
     """
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+
+def save_chunks(df: pd.DataFrame, base_filename, n_chunks=4, suffix="chunk") -> list[pd.DataFrame]:
+    chunks = divide_n_chunks(df, n_chunks)
+    for i, subdf in enumerate(chunks):
+        save_dataframe(subdf, add_filename_suffix(base_filename, f"{suffix}{i}"))
+    return chunks
+
+
+def combine_chunks(base_filename, suffix="chunk") -> pd.DataFrame:
+    dfs = []
+    counter = 0
+    while True:
+        try:
+            file = add_filename_suffix(base_filename, f"{suffix}{counter}")
+            df = read_dataframe(file)
+            dfs.append(df)
+            logging.info("Loaded chunk:" + file)
+            counter += 1
+        except:
+            break
+
+    return pd.concat(dfs, ignore_index=True)

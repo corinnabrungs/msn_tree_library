@@ -2,6 +2,8 @@ from unittest import TestCase
 import pandas as pd
 
 import structure_classifier_client
+from rest_utils import get_json_response
+from structure_classifier_client import np_classifier_url
 
 
 class Test(TestCase):
@@ -27,3 +29,11 @@ class Test(TestCase):
 
         new_cols = [col for col in df.columns if structure_classifier_client.NP_CLASSIFIER_PREFIX in col]
         assert len(new_cols) > 2
+
+    def test_np_classifier(self):
+        smiles = "COc1c(O)ccc(/C=C/C(=O)NCC(O)c2ccc(O)cc2)c1"
+        npclass = np_classifier_url(smiles)
+        json = get_json_response(npclass)
+
+        assert npclass != None
+        assert json != None

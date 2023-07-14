@@ -6,10 +6,12 @@ import pandas as pd
 import pubchempy
 from joblib import Memory
 from pubchempy import Compound, get_compounds
+import synonyms
 
 from date_utils import create_expired_entries_dataframe, iso_datetime_now
 from meta_constants import MetaColumns
-from pandas_utils import notnull, isnull, update_dataframes, get_or_else, make_str_floor_to_int_number
+from pandas_utils import notnull, isnull, update_dataframes, get_or_else, make_str_floor_to_int_number, \
+    get_first_or_else
 from tqdm import tqdm
 from rdkit_mol_identifiers import ensure_smiles_column
 
@@ -20,14 +22,14 @@ logging.getLogger('pubchempy').setLevel(logging.DEBUG)
 memory = Memory("memcache")
 
 
-def copy_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
+def prepend_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
     try:
         pc_synonyms = [pubchem_get_synonyms(compound) for compound in df["pubchem"]]
-        df[MetaColumns.synonyms] = [[] if isnull(synonyms) else synonyms for synonyms in df["synonyms"]]
-        df[MetaColumns.synonyms] = [a + b for a, b in zip(pc_synonyms, df["synonyms"])]
+        df = synonyms.ensure_synonyms_column(df)
+        df[MetaColumns.synonyms] = [synonyms.add_synonyms(old, new) for new, old in zip(pc_synonyms, df["synonyms"])]
     except:
         logging.exception("No synonyms")
-    return df
+        return df
 
 
 def pubchem_search_by_cid(row):
@@ -61,14 +63,13 @@ def pubchem_search_by_names(row) -> str | None:
 
 
 def transform_pubchem_columns(filtered: pd.DataFrame, apply_structures: bool) -> pd.DataFrame:
-    from synonyms import get_first_synonym
     filtered[MetaColumns.pubchem_cid] = [compound.cid for compound in filtered["pubchem"]]
     filtered = make_str_floor_to_int_number(filtered, MetaColumns.pubchem_cid)
     filtered[MetaColumns.pubchem_cid_parent] = filtered[MetaColumns.pubchem_cid]
-    filtered[MetaColumns.compound_name] = [get_first_synonym(compound) for compound in filtered["pubchem"]]
     filtered[MetaColumns.iupac] = [compound.iupac_name for compound in filtered["pubchem"]]
     filtered["pubchem_logp"] = [compound.xlogp for compound in filtered["pubchem"]]
-    filtered = copy_pubchem_synonyms(filtered)
+    filtered = prepend_pubchem_synonyms(filtered)
+    filtered[MetaColumns.compound_name] = [get_first_or_else(synonyms) for synonyms in filtered[MetaColumns.synonyms]]
     if apply_structures:
         filtered[MetaColumns.isomeric_smiles] = [compound.isomeric_smiles for compound in filtered["pubchem"]]
         filtered[MetaColumns.canonical_smiles] = [compound.canonical_smiles for compound in filtered["pubchem"]]
@@ -209,13 +210,17 @@ def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
     """
     if name_or_cas == "NaN":
         return None
-    compounds = get_compounds(name_or_cas, "name")
-    if not compounds:
-        logging.info("Pubchem has no entry named:{}".format(name_or_cas))
-        return None
-    else:
-        compounds.sort(key=lambda comp: pubchem_compound_score(comp), reverse=True)
-        return compounds[0]
+    try:
+        compounds = get_compounds(name_or_cas, "name")
+        if not compounds:
+            logging.info("Pubchem has no entry named:{}".format(name_or_cas))
+            return None
+        else:
+            compounds.sort(key=lambda comp: pubchem_compound_score(comp), reverse=True)
+            return compounds[0]
+    except:
+        logging.warning(f"FAILED PUBCHEM by name {name_or_cas}")
+        pass
 
 
 @memory.cache
@@ -230,7 +235,7 @@ def _pubchem_by_cid(cid, ntry=1, max_tries=10) -> Compound | None:
         if ntry < max_tries:
             return _pubchem_by_cid(cid, ntry=ntry + 1, max_tries=max_tries)
         else:
-            logging.exception("Cannot retrieve pubchem CID {}".format(cid))
+            logging.exception("Cannot retrieve PUBCHEM CID {}".format(cid))
             return None
 
 
@@ -306,5 +311,5 @@ def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
         if try_n < max_tries:
             return _pubchem_get_synonyms(compound, try_n=try_n + 1, max_tries=max_tries)
         else:
-            logging.exception("Failed to retrieve synonyms for compound {}".format(compound.cid))
+            logging.exception("FAILED to retrieve PUBCHEM synonyms for compound {}".format(compound.cid))
             return []

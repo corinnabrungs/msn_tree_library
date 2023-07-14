@@ -5,7 +5,7 @@ import ast
 import pandas as pd
 
 import pandas_utils
-from pandas_utils import get_or_else, get_unique_list, notnull
+from pandas_utils import get_or_else, get_unique_list, notnull, isnull
 from pubchem_client import pubchem_get_synonyms
 
 
@@ -34,11 +34,17 @@ def get_all_synonyms(row):
     except:
         logging.exception("Cannot concat synonyms")
 
-    # TODO remove this Synonyms columns?
-    # synonyms.extend([s.strip() for s in str(get_or_else(row, "synonyms", "")).split(";")])
-
     synonyms = [x.strip() for x in synonyms if x]
     return get_unique_list(synonyms)
+
+
+def add_synonyms(old_synonyms, new_synonyms, prepend: bool = True) -> list:
+    if isnull(old_synonyms):
+        old_synonyms = []
+    if isnull(new_synonyms):
+        new_synonyms = []
+    all = new_synonyms + old_synonyms if prepend else old_synonyms + new_synonyms
+    return get_unique_list(all)
 
 
 def get_first_synonym(compound):
