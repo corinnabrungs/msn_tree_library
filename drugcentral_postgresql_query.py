@@ -2,6 +2,8 @@ from configparser import ConfigParser
 
 import logging
 from functools import lru_cache
+
+from meta_constants import MetaColumns
 from pandas_utils import notnull
 
 import pandas as pd
@@ -168,6 +170,38 @@ def drugcentral_for_row(row):
 
             except Exception as e:
                 logging.exception("Something went wrong while querying drugcentral")
+
+        return None, None
+    except (Exception, psycopg2.DatabaseError) as error:
+        logging.warning(error)
+        return None, None
+
+
+def drugcentral_additional_query(dc_id):
+    global is_connected, conn
+    if not is_connected:
+        logging.info("First connect to the DrugCentral database")
+        logging.warning(INFO)
+        return None, None
+    try:
+        try:
+            if notnull(dc_id) and len(str(dc_id)) > 0:
+                with conn.cursor() as cur:
+                    try:
+                        query = DRUGCENTRAL_ADD_SQL.format(str(dc_id))
+                        # logging.info(query)
+                        cur.execute(query)
+                        structure = cur.fetchone()
+                        if structure:
+                            return cur.description, structure
+                    except Exception as err:
+                        # pass exception to function
+                        logging.exception("Error in postgresql drugcentral query")
+                        # rollback the previous transaction before starting another
+                        conn.rollback()
+
+        except Exception as e:
+            logging.exception("Something went wrong while querying drugcentral")
 
         return None, None
     except (Exception, psycopg2.DatabaseError) as error:
