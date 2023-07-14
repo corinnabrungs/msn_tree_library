@@ -4,6 +4,8 @@ from datetime import date
 from tqdm import tqdm
 import logging
 import os
+from dataclasses import dataclass
+import pandas_utils as pu
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
@@ -11,38 +13,53 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 base_filename_header = "base_filename"
 
 
+@dataclass
+class InstrumentMethod:
+    identifier: str
+    path: str
+
+
 def main():
-    metadata_file = r"data/nih/nih_library_new_headers.tsv"
-    data_filepath = r"C:\Xcalibur\data\Corinna_Brungs"  # storage path for the acquired data
+    metadata_file = r"C:\git\msn_library\data\library\mce_library_all_cleaned.tsv"
+    data_filepath = r"D:\Corinna_Brungs"  # storage path for the acquired data
 
     # define all variables
-    inject_volume_mul = 3
-    lib_id = "pluskal_nih"
-    method_suffix = "TESTMETHOD"  # is added to the end of the path and file names
-    instrument_method_positive = r"C:\Xcalibur\methods\Corinna_Brungs\IT_acquisition\IT_100AG_MS5_POS_mz115-2000"
-    instrument_method_negative = r"C:\Xcalibur\methods\Corinna_Brungs\IT_acquisition\IT_100AG_MS5_NEG_mz115-2000"
+    inject_volume_mul = 1
+    lib_id = "pluskal_mce"
+    method_suffix = "rt_ms2"  # is added to the end of the path and file names
+    instrument_methods = [
+        InstrumentMethod("positive",
+                         r"C:\Xcalibur\methods\Corinna_Brungs\RT_prediction\20230615_JLW_method_0_5min_equ_positive_MS2_pos_rcc"),
+        # InstrumentMethod("negative", r"Test"),
+        # InstrumentMethod("polarity_switching", r"Test"),
+    ]
 
     # plates are inserted into x compartment
     # if plate is not named in the metadata table by plate_id_header column - leave the plate_id empty
     plates_in_autosampler_location = [
         # plate_id, location
-        ("15", "B"),
+        ("1D2", "B"),
+        ("1D3", "G"),
     ]
 
-    create_orbitrap_sequence(metadata_file, data_filepath, instrument_method_positive, instrument_method_negative,
-                             lib_id, method_suffix, plates_in_autosampler_location, inject_volume_mul=inject_volume_mul)
+    create_orbitrap_sequence(
+        metadata_file, data_filepath, instrument_methods,
+        lib_id, method_suffix, plates_in_autosampler_location, inject_volume_mul=inject_volume_mul,
+        blank_well="F2", qc_well="F1", blank_qc_autosampler_location="R", blank_every_n_samples=20
+    )
 
 
-def create_orbitrap_sequence(metadata_file, data_filepath: str, instrument_method_positive: str | None,
-                             instrument_method_negative: str | None, lib_id: str, method_suffix: str,
+def create_orbitrap_sequence(metadata_file, data_filepath: str, instrument_methods: list[InstrumentMethod], lib_id: str,
+                             method_suffix: str,
                              plates_in_autosampler_location: list, unique_id_header="unique_sample_id",
-                             plate_id_header="plate_id", well_header="well_location", inject_volume_mul=3):
+                             plate_id_header="plate_id", well_header="well_location", inject_volume_mul=3,
+                             blank_well=None, qc_well=None, blank_qc_autosampler_location=None,
+                             blank_every_n_samples=20):
     """
     Creates sequences for orbitrap instruments
     :param metadata_file: the metadata file that contains the well_location, plate_id, and unique_sample_id columns
     :param data_filepath: path to store acquired data to
-    :param instrument_method_positive: positive mode method and path - or None to skip
-    :param instrument_method_negative: negative mode method and path - or None to skip
+    :param instrument_methods: methods and paths
     :param lib_id: defines the compound library
     :param method_suffix: defines the method, e.g., MSn, IT, HCD, ...
     :param plates_in_autosampler_location: list of tuples plate_id, location as tuples ("15", "B"),
@@ -52,7 +69,8 @@ def create_orbitrap_sequence(metadata_file, data_filepath: str, instrument_metho
     :param inject_volume_mul: micro liter injection volume
     :return:
     """
-    current_date = date.today().strftime("%Y%m%d")
+    # current_date = date.today().strftime("%Y%m%d")
+    current_date = "20230620"
     # NO NEED TO CHANGE ANYTHING BELOW
     # final values
     data_filepath = os.path.join(data_filepath, lib_id, f"{current_date}_{method_suffix}")
@@ -64,16 +82,54 @@ def create_orbitrap_sequence(metadata_file, data_filepath: str, instrument_metho
         sequence_file = f"data/Sequence/{current_date}_seq_rack_{plate_location}_{lib_id}_{plate_id}_{method_suffix}"
 
         df = _create_orbitrap_sequence(plate_df, sequence_file, data_filepath, well_header, plate_location,
-                                       instrument_method_positive, instrument_method_negative, inject_volume_mul)
+                                       instrument_methods, inject_volume_mul)
         dataframes.append(df)
     concat = pd.concat(dataframes)
     plates_str = "_".join(["{}in{}".format(plate_id, loc) for plate_id, loc in plates_in_autosampler_location])
     sequence_file = f"data/Sequence/{current_date}_{plates_str}_seq_combined.csv"
-    write_thermo_sequence(sequence_file, concat)
+    # add blanks and qcs
+    final_df = add_blank_qc_rows(concat, data_filepath, instrument_methods, blank_well, qc_well,
+                                 blank_qc_autosampler_location, blank_every_n_samples)
+
+    write_thermo_sequence(sequence_file, final_df)
+
+
+def add_blank_qc_rows(df: pd.DataFrame, data_filepath, instrument_methods, blank_well, qc_well,
+                      blank_qc_autosampler_location, blank_every_n_samples) -> pd.DataFrame:
+    if blank_well is None and qc_well is None:
+        return df
+
+    # TODO handle blank and qc autosampler location is None and use current plate
+
+    main_method = instrument_methods[0]
+    row_blank = {
+        "File Name": "Blank",
+        "Path": f"{data_filepath}_{main_method.identifier}",
+        "Instrument Method": main_method.path,
+        "Position": "{}:{}".format(blank_qc_autosampler_location, blank_well),
+        "Inj Vol": "1",
+        "Dil Factor": 1
+    }
+    row_qc = {
+        "File Name": "QC",
+        "Path": f"{data_filepath}_{main_method.identifier}",
+        "Instrument Method": main_method.path,
+        "Position": "{}:{}".format(blank_qc_autosampler_location, qc_well),
+        "Inj Vol": "1",
+        "Dil Factor": 1
+    }
+    blank_qc_df = pd.DataFrame([
+        row_blank, row_qc
+    ])
+    chunks = pu.divide_chunks(df, blank_every_n_samples)
+    chunks = [pd.concat([blank_qc_df, chunk]) for chunk in chunks]
+    chunks.append(blank_qc_df)
+    final_df = pd.concat(chunks)
+    return final_df
 
 
 def _create_orbitrap_sequence(metadata_df: DataFrame, sequence_file, data_filepath, well_header, plate_location,
-                              instrument_method_positive=None, instrument_method_negative=None,
+                              instrument_methods: list[InstrumentMethod],
                               inject_volume_mul=3) -> DataFrame:
     """
     Creates Orbitrap sequence for positive and negative mode
@@ -83,20 +139,18 @@ def _create_orbitrap_sequence(metadata_df: DataFrame, sequence_file, data_filepa
     :param sequence_file: the base sequence file to export. polarity and file type csv will be added automatically
     :param metadata_df: a dataframe that is already filtered to only contain samples from a single plate
     :param well_header: getting the well number of the final plate, e.g., A1
-    :param instrument_method_positive: instrument method in positive mode
-    :param instrument_method_negative: instrument method in negative mode
+    :param instrument_methods: instrument methods
     :param plate_location: position in the autosampler
     Sequence for Plate 2 and Position Green
     :param inject_volume_mul: injection volume in micro liter
     :return:
     """
-    if not instrument_method_positive and not instrument_method_negative:
-        raise ValueError("Provide at least one method file for positive or negative")
+    if len(instrument_methods) == 0:
+        raise ValueError("Provide at least one method file")
 
-    instrument_methods = [instrument_method_positive, instrument_method_negative]
-    polarities = ["positive", "negative"]
     dataframes = []
-    for polarity, instrument_method in zip(polarities, instrument_methods):
+    for method in instrument_methods:
+        polarity, instrument_method = method.identifier, method.path
         if not instrument_method:
             continue
 
@@ -131,7 +185,8 @@ def load_metadata_df(metadata_file, well_header, unique_id_header, method_suffix
         raise ValueError(
             f"No column named {unique_id_header} with unique sample ids. Run metadata clean up that generates a unique id, e.g., lib_plate1_A1_id (note the _id at the end and the prefix that make sure that wells like A1 do not match to A10)")
 
-    current_date = date.today().strftime("%Y%m%d")
+    # current_date = date.today().strftime("%Y%m%d")
+    current_date = "20230620"
     df[base_filename_header] = ["{}_{}_{}".format(current_date, unique_id, method_suffix) for unique_id in
                                 df[unique_id_header]]
     return df
