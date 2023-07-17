@@ -5,6 +5,7 @@ from strenum import StrEnum
 
 class MetaColumns(StrEnum):
     # run dates
+    date_pubchem_parent_cid_search = auto()
     date_pubchem_cid_search = auto()
     date_pubchem_name_search = auto()
     date_pubchem_structure_search = auto()
@@ -56,7 +57,7 @@ class MetaColumns(StrEnum):
     cas = auto()
     unii = auto()
     pubchem_cid = auto()
-    pubchem_cid_parent = auto()
+    input_pubchem_cid = auto()
     chembl_id = auto()
     chebi_id = auto()
     drugbank_id = auto()
