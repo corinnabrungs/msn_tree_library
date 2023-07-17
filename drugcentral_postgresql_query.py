@@ -21,19 +21,77 @@ select structures.id, cas_reg_no, structures.name, structures.inchikey, inchi, s
 from structures
 left join approval a on structures.id = a.struct_id
 left join identifier i on structures.id = i.struct_id
+
 -- condition defined in code
 where {}
 GROUP BY structures.id, cas_reg_no, structures.name, inchi, smiles, structures.stem, mrdef, structures.inchikey, status
 limit 1;
 """
 
-DRUGCENTRAL_ADD_SQL = """
-select structures.id,
+DRUGCENTRAL_ADD_SQL = [
+    """
+select structures.id, 
        string_agg(distinct syn.name, ',') as "synonyms",
        string_agg(distinct pc.type, ',') as "pharma_type",
-       string_agg(distinct pc.name, ',') as "pharma_class",
-       string_agg(distinct s2atc.atc_code, ',') as "atc",
+       string_agg(distinct pc.name, ',') as "pharma_class"
+from structures
+left join synonyms syn on structures.id = syn.id
+left join pharma_class pc on structures.id = pc.struct_id
+-- condition defined in code
+where structures.id = '{}'
+GROUP BY structures.id
+limit 1;
+""",
+    """
+select structures.id, 
        string_agg(distinct concat_ws('', ai.quantity::text, ai.unit), ',') as "dosage",
+       string_agg(distinct stem.definition, ',') as "stem_definition"
+from structures
+left join active_ingredient ai on structures.id = ai.struct_id
+left join inn_stem stem on structures.stem = stem.stem
+-- condition defined in code
+where structures.id = '{}'
+GROUP BY structures.id
+limit 1;
+""",
+    """
+select structures.id,
+       string_agg(distinct (s2p.parent_id::text), ',') as "parent_id",
+       string_agg(distinct str.strength, ';') as "strength"
+from structures
+left join struct2parent s2p on structures.id = s2p.struct_id
+left join struct2obprod str on structures.id = str.struct_id
+-- condition defined in code
+where structures.id = '{}'
+GROUP BY structures.id
+limit 1;
+""",
+    """
+select structures.id,
+       string_agg(distinct concat_ws('', atc_ddd.ddd::text, atc_ddd.unit_type), ',') as "who_defined_daily_dose",
+       string_agg(distinct s2atc.atc_code, ',') as "atc"
+from structures
+left join atc_ddd on structures.id = atc_ddd.struct_id
+left join struct2atc s2atc on structures.id = s2atc.struct_id
+-- condition defined in code
+where structures.id = '{}'
+GROUP BY structures.id
+limit 1;
+""",
+    """
+select structures.id,
+       string_agg(distinct concat_ws(':', o.relationship_name, o.concept_name), ';') as "indication; contraindication; off_label"
+from structures
+left join omop_relationship o on structures.id = o.struct_id
+-- condition defined in code
+where structures.id = '{}'
+GROUP BY structures.id
+limit 1;
+"""
+]
+
+DRUGCENTRAL_ADD2_SQL = """
+select structures.id,
        string_agg(distinct stem.definition, ',') as "stem_definition",
        string_agg(distinct (s2p.parent_id::text), ',') as "parent_id",
        string_agg(distinct str.strength, ';') as "strength",
@@ -42,10 +100,6 @@ select structures.id,
        string_agg(distinct v.species, ';') as "animal_species",
        string_agg(distinct concat_ws(':', v.relationship_type, v.concept_name), ';') as "indication"
 from structures
-left join synonyms syn on structures.id = syn.id
-left join pharma_class pc on structures.id = pc.struct_id
-left join struct2atc s2atc on structures.id = s2atc.struct_id
-left join active_ingredient ai on structures.id = ai.struct_id
 left join inn_stem stem on structures.stem = stem.stem
 left join struct2parent s2p on structures.id = s2p.struct_id
 left join atc_ddd on structures.id = atc_ddd.struct_id
@@ -59,15 +113,13 @@ GROUP BY structures.id
 limit 1;
 """
 
-
-
 #  dict column name in our dataframe, and the SQL query where condition
 EXTERNAL_IDS = {
     "unii": "i.id_type = 'UNII' and i.identifier = '{}'",
     "drugbank_id": "i.id_type = 'DRUGBANK_ID' and i.identifier = '{}'",
     "chembl_id": "i.id_type = 'ChEMBL_ID' and i.identifier = '{}'",
-    "pubchem_cid_parent": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
     "pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
+    "input_pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
     "inchikey": "structures.inchikey = '{}'",
     "compound_name": "lower(structures.name) ~ lower('{}')",
     "split_inchikey": "structures.inchikey ~ '^{}'",
@@ -177,7 +229,7 @@ def drugcentral_for_row(row):
         return None, None
 
 
-def drugcentral_additional_query(dc_id):
+def drugcentral_additional_query(dc_id, sql_query):
     global is_connected, conn
     if not is_connected:
         logging.info("First connect to the DrugCentral database")
@@ -188,7 +240,7 @@ def drugcentral_additional_query(dc_id):
             if notnull(dc_id) and len(str(dc_id)) > 0:
                 with conn.cursor() as cur:
                     try:
-                        query = DRUGCENTRAL_ADD_SQL.format(str(dc_id))
+                        query = sql_query.format(str(dc_id))
                         # logging.info(query)
                         cur.execute(query)
                         structure = cur.fetchone()
@@ -230,7 +282,8 @@ def drugcentral_postgresql(inchikey=None, split_inchikey=None):
                 cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["split_inchikey"].format(split_inchikey)))
                 structure = cur.fetchone()
             if not structure:
-                logging.info("NO Drugcentral match FOR: Inchikey:{} and split_inchikey:{}".format(inchikey, split_inchikey))
+                logging.info(
+                    "NO Drugcentral match FOR: Inchikey:{} and split_inchikey:{}".format(inchikey, split_inchikey))
                 return None, None
             else:
                 return cur.description, structure
