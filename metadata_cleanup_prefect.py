@@ -14,7 +14,7 @@ from metadata_cleanup import extract_prepare_input_data, save_results, drop_dupl
 from npatlas_client import search_np_atlas
 from pandas_utils import update_dataframes
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
-    pubchem_search_structure_by_cid
+    pubchem_search_structure_by_cid, pubchem_search_parent
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns
 from synonyms import ensure_synonyms_column, extract_synonym_ids
 from structure_classifier_client import apply_np_classifier, apply_classyfire
@@ -40,9 +40,9 @@ def save_intermediate_parquet_prefect(df, metadata_file):
     save_intermediate_parquet(df, metadata_file)
 
 
-@task(name="PubChem by CID")
-def pubchem_search_structure_by_cid_prefect(df, apply_structures: bool):
-    return pubchem_search_structure_by_cid(df, apply_structures)
+@task(name="PubChem parent by CID")
+def pubchem_search_parent_by_cid_prefect(df, apply_structures: bool):
+    return pubchem_search_parent(df, apply_structures)
 
 
 @task(name="PubChem by name")
@@ -126,7 +126,7 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
                                             use_cached_parquet_file)
 
     if query_pubchem_by_cid:
-        df = pubchem_search_structure_by_cid_prefect(df, apply_structures=True)
+        df = pubchem_search_parent_by_cid_prefect(df, apply_structures=True)
 
     # Query pubchem by name and CAS
     if query_pubchem_by_name:
@@ -138,6 +138,16 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     # calculate all identifiers from mol - monoisotopic_mass, ...
     if calc_identifiers:
         df = clean_structure_add_mol_id_columns_prefect(df)
+
+    if query_pubchem_by_structure:
+        df = pubchem_search_by_structure_prefect(df)
+        save_intermediate_parquet_prefect(df, metadata_file)
+
+    if query_pubchem_by_cid:
+        df = pubchem_search_parent_by_cid_prefect(df, apply_structures=True)
+        if calc_identifiers:
+            df = clean_structure_add_mol_id_columns_prefect(df)
+        save_intermediate_parquet_prefect(df, metadata_file)
 
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
     df = drop_duplicates_by_structure_rowid_reset_index(df)
@@ -167,13 +177,6 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
         df = search_all_unichem_xrefs_prefect(df, metadata_file)
         save_intermediate_parquet_prefect(df, metadata_file)
 
-    if query_pubchem_by_cid:
-        df = pubchem_search_structure_by_cid_prefect(df, apply_structures=False)
-        save_intermediate_parquet_prefect(df, metadata_file)
-
-    if query_pubchem_by_structure:
-        df = pubchem_search_by_structure_prefect(df)
-        save_intermediate_parquet_prefect(df, metadata_file)
 
     # extract ids like the UNII, ...
     df = ensure_synonyms_column(df)

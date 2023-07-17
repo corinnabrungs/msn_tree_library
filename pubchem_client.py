@@ -6,6 +6,8 @@ import pandas as pd
 import pubchempy
 from joblib import Memory
 from pubchempy import Compound, get_compounds
+
+import pandas_utils
 import synonyms
 
 from date_utils import create_expired_entries_dataframe, iso_datetime_now
@@ -29,20 +31,23 @@ def prepend_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
         df[MetaColumns.synonyms] = [synonyms.add_synonyms(old, new) for new, old in zip(pc_synonyms, df["synonyms"])]
     except:
         logging.exception("No synonyms")
-        return df
+    return df
+
+
+cid_search_columns = [MetaColumns.pubchem_cid, MetaColumns.input_pubchem_cid]
 
 
 def pubchem_search_by_cid(row):
     if notnull(row["pubchem"]):
         return row["pubchem"]
 
-    compound = None
-    if "pubchem_cid_parent" in row:
-        compound = pubchem_by_cid(row["pubchem_cid_parent"])
-    if isnull(compound) and MetaColumns.pubchem_cid in row:
-        compound = pubchem_by_cid(row[MetaColumns.pubchem_cid])
+    for col in cid_search_columns:
+        if col in row:
+            comp = pubchem_by_cid(row[col])
+            if notnull(comp):
+                return comp
 
-    return compound
+    return None
 
 
 name_search_columns = [MetaColumns.compound_name, MetaColumns.cas, MetaColumns.input_name, "product_name"]
@@ -65,7 +70,6 @@ def pubchem_search_by_names(row) -> str | None:
 def transform_pubchem_columns(filtered: pd.DataFrame, apply_structures: bool) -> pd.DataFrame:
     filtered[MetaColumns.pubchem_cid] = [compound.cid for compound in filtered["pubchem"]]
     filtered = make_str_floor_to_int_number(filtered, MetaColumns.pubchem_cid)
-    filtered[MetaColumns.pubchem_cid_parent] = filtered[MetaColumns.pubchem_cid]
     filtered[MetaColumns.iupac] = [compound.iupac_name for compound in filtered["pubchem"]]
     filtered["pubchem_logp"] = [compound.xlogp for compound in filtered["pubchem"]]
     filtered = prepend_pubchem_synonyms(filtered)
@@ -125,6 +129,48 @@ def pubchem_search_structure_by_cid(df: pd.DataFrame, apply_structures: bool,
     # keep pubchem to limit name search
     return update_dataframes(filtered, df)
     # return update_dataframes(filtered, df).drop(columns=["pubchem"], errors="ignore")
+
+
+def pubchem_search_parent(df: pd.DataFrame, apply_structures: bool,
+                          refresh_expired_entries_after: dt.timedelta = dt.timedelta(
+                              days=90)) -> pd.DataFrame:
+    logging.info("Search PubChem parents pubchem_cid")
+    df["pubchem"] = None
+
+    # only work on expired elements
+    # define which rows are old or were not searched before
+    filtered = create_expired_entries_dataframe(df, MetaColumns.date_pubchem_parent_cid_search,
+                                                refresh_expired_entries_after)
+
+    if len(filtered) == 0:  # no need to update
+        return df
+
+    # some are filled from the name  or cid search
+    if MetaColumns.input_pubchem_cid not in filtered:
+        filtered[MetaColumns.input_pubchem_cid] = None
+    if MetaColumns.pubchem_cid not in filtered:
+        filtered[MetaColumns.pubchem_cid] = None
+    filtered[MetaColumns.input_pubchem_cid] = [input_cid if notnull(input_cid) else cid
+                                               for input_cid, cid in zip(filtered[MetaColumns.input_pubchem_cid],
+                                                                         filtered[MetaColumns.pubchem_cid])]
+    # get parent CIDs, filter out failed, map to compound, apply all columns
+    filtered[MetaColumns.pubchem_cid] = filtered[MetaColumns.input_pubchem_cid].progress_apply(
+        lambda cid: get_pubchem_parent_cid(cid))
+    filtered = filtered[filtered[MetaColumns.pubchem_cid].notnull()].copy()
+    filtered["pubchem"] = filtered[MetaColumns.pubchem_cid].progress_apply(lambda cid: pubchem_by_cid(cid))
+    filtered = filtered[filtered["pubchem"].notnull()].copy()
+    # refresh date
+    filtered[MetaColumns.date_pubchem_parent_cid_search] = iso_datetime_now()
+
+    # transform create columns, do not copy structures as they are already cleaned by this script
+    filtered = transform_pubchem_columns(filtered, apply_structures=apply_structures)
+
+    if apply_structures:
+        filtered = split_label_structure_sources(filtered, source_name="parent_pubchem_cid")
+
+    # combine new data with old rows that were not processed
+    # keep pubchem to limit name search
+    return update_dataframes(filtered, df)
 
 
 def pubchem_search_structure_by_name(df: pd.DataFrame, refresh_expired_entries_after: dt.timedelta = dt.timedelta(
@@ -254,11 +300,11 @@ def search_pubchem_by_structure(smiles=None, inchi=None, inchikey=None) -> Compo
     compounds = None
     try:
         if inchikey:
-            compounds = get_pubchem_compound(inchikey, "inchikey")
+            compounds = get_pubchem_compound(inchikey, MetaColumns.inchikey)
         if not compounds and smiles:
             compounds = get_pubchem_compound(smiles, MetaColumns.smiles)
         if not compounds and inchi:
-            compounds = get_pubchem_compound(inchi, "inchi")
+            compounds = get_pubchem_compound(inchi, MetaColumns.inchi)
         if not compounds:
             logging.info("NO PUBCHEM FOR: smiles:{}  inchi:{}   inchikey:{}".format(smiles, inchi, inchikey))
             return None
@@ -313,3 +359,45 @@ def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
         else:
             logging.exception("FAILED to retrieve PUBCHEM synonyms for compound {}".format(compound.cid))
             return []
+
+
+@memory.cache
+def get_pubchem_parent_cid(cid, orphans_as_self=True) -> str | None:
+    return _get_pubchem_parent_cid(cid, orphans_as_self)
+
+
+def _get_pubchem_parent_cid(cid, orphans_as_self=True, try_n=1, max_tries=10) -> str | None:
+    """
+    From a pubchem_cid, retreive the parent compound's cid.
+    If function is unsuccesful in retrieving a single parent,
+    `orphans_as_self = True` returns `cid` rather than None.
+
+    According to pubmed:
+
+    > A parent is conceptually the "important" part of the molecule
+    > when the molecule has more than one covalent component.
+    > Specifically, a parent component must have at least one carbon
+    > and contain at least 70% of the heavy (non-hydrogen) atoms of
+    > all the unique covalent units (ignoring stoichiometry).
+    > Note that this is a very empirical definition and is subject to change.
+    A parallel query can be executed using the REST PUG API:
+    http://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11477084/cids/XML?cids_type=parent
+    """
+    if isnull(cid):
+        return None
+
+    try:
+        parent_cids = pubchempy.get_cids(identifier=cid, namespace='cid', domain='compound', cids_type='parent')
+    except pubchempy.BadRequestError:
+        if try_n < max_tries:
+            return _get_pubchem_parent_cid(cid, orphans_as_self, try_n + 1, max_tries)
+        else:
+            logging.exception('Error getting parent of {}'.format(cid))
+            return None  # error return None to redo later
+    try:
+        if len(parent_cids) > 0:
+            return str(parent_cids[0])
+        return cid if orphans_as_self else None
+    except Exception:
+        logging.exception('Error getting parent of {}. Parents retrieved: {}'.format(cid, parent_cids))
+        return cid if orphans_as_self else None

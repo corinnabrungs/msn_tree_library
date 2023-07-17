@@ -16,7 +16,7 @@ from npatlas_client import search_np_atlas
 from pandas_utils import read_dataframe, add_filename_suffix, get_parquet_file, save_dataframe, remove_empty_strings, \
     update_dataframes, remove_line_breaks
 from pubchem_client import pubchem_search_structure_by_name, pubchem_search_by_structure, \
-    pubchem_search_structure_by_cid
+    pubchem_search_structure_by_cid, pubchem_search_parent
 from rdkit_mol_identifiers import clean_structure_add_mol_id_columns, ensure_smiles_column
 from structure_classifier_client import apply_np_classifier, apply_classyfire
 from synonyms import ensure_synonyms_column, extract_synonym_ids
@@ -145,7 +145,9 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     df = extract_prepare_input_data(metadata_file, lib_id, plate_id_header, well_header, use_cached_parquet_file)
 
     if query_pubchem_by_cid:
-        df = pubchem_search_structure_by_cid(df, apply_structures=True)
+        df = pubchem_search_parent(df, apply_structures=True)
+
+    save_intermediate_parquet(df, metadata_file)
 
     # Query pubchem by name and CAS
     if query_pubchem_by_name:
@@ -158,6 +160,17 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     if calc_identifiers:
         df = clean_structure_add_mol_id_columns(df, drop_mol=True)
 
+    if query_pubchem_by_structure:
+        df = pubchem_search_by_structure(df)
+        save_intermediate_parquet(df, metadata_file)
+
+    if query_pubchem_by_cid:
+        df = pubchem_search_parent(df, apply_structures=True)
+        if calc_identifiers:
+            df = clean_structure_add_mol_id_columns(df, drop_mol=True)
+
+        save_intermediate_parquet(df, metadata_file)
+
     # drop duplicates because PubChem name search might generate new rows for conflicting smiles structures
     df = drop_duplicates_by_structure_rowid_reset_index(df)
     save_intermediate_parquet(df, metadata_file)
@@ -165,15 +178,6 @@ def cleanup_file(metadata_file, lib_id, plate_id_header="plate_id", well_header=
     # add new columns for cross references to other databases
     if query_unichem:
         search_all_unichem_xrefs(df, metadata_file)
-
-    save_intermediate_parquet(df, metadata_file)
-
-    if query_pubchem_by_cid:
-        # CID gathered from unichem came from structure, do not change structure this time
-        df = pubchem_search_structure_by_cid(df, apply_structures=False)
-
-    if query_pubchem_by_structure:
-        df = pubchem_search_by_structure(df)
 
     save_intermediate_parquet(df, metadata_file)
 
