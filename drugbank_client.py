@@ -31,9 +31,13 @@ def find_in_drugbank(drugbank_df, row):
         dbid = next((d for d in drugbank_df[drugbank_df["drugbank_id"] == row["drugbank_id"]]["drugbank_id"]), None)
     if notnull(row["inchikey"]):
         dbid = next((d for d in drugbank_df[drugbank_df["inchikey"] == row["inchikey"]]["drugbank_id"]), None)
-    if isnull(dbid) and not isnull(row["pubchem_cid_parent"]):
-        dbid = next((d for d in drugbank_df[drugbank_df["pubchem_cid"] == row["pubchem_cid_parent"]]["drugbank_id"]),
+    if isnull(dbid) and not isnull(row[MetaColumns.pubchem_cid]):
+        dbid = next((d for d in drugbank_df[drugbank_df["pubchem_cid"] == row[MetaColumns.pubchem_cid]]["drugbank_id"]),
                     None)
+    if isnull(dbid) and not isnull(row[MetaColumns.input_pubchem_cid]):
+        dbid = next(
+            (d for d in drugbank_df[drugbank_df["pubchem_cid"] == row[MetaColumns.input_pubchem_cid]]["drugbank_id"]),
+            None)
     if isnull(dbid) and notnull(row["chembl_id"]):
         dbid = next((d for d in drugbank_df[drugbank_df["chembl_id"] == row["chembl_id"]]["drugbank_id"]), None)
     if isnull(dbid) and notnull(row["unii"]):
