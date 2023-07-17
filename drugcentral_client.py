@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 import pandas_utils
 from date_utils import iso_datetime_now
+from drugcentral_postgresql_query import DRUGCENTRAL_ADD_SQL
 from meta_constants import MetaColumns
 from pandas_utils import notnull, update_dataframes, make_str_floor_to_int_number
 
@@ -31,11 +32,13 @@ def drugcentral_search(df):
             'name': 'compound_name',
         })
         # run additional query with id
-        results = dc_df["id"].progress_apply(lambda dc_id: drugcentral_query.drugcentral_additional_query(dc_id))
-        logging.info("DrugCentral additional search done")
-        add_df = sql_results_to_df(df, results)
-
-        dc_df = update_dataframes(dc_df, add_df)
+        for i, sql_query in enumerate(DRUGCENTRAL_ADD_SQL):
+            logging.info("Additional drugcentral query {}".format(i + 1))
+            results = dc_df["id"].progress_apply(
+                lambda dc_id: drugcentral_query.drugcentral_additional_query(dc_id, sql_query))
+            logging.info("DrugCentral additional search done")
+            add_df = sql_results_to_df(df, results)
+            dc_df = update_dataframes(dc_df, add_df)
 
         dc_df = dc_df.add_prefix(prefix)
 

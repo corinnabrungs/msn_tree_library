@@ -54,7 +54,7 @@ class TestDrugCentral(TestCase):
             "identifier": ["", "inchikey", "chembl_id", "pubchem_cid", "unii", "drugbank_id", "split_inchikey"],
             "inchikey": ["", "GKDRMWXFWHEQQT-UHFFFAOYSA-N", "", "", "", "", ""],
             "chembl_id": ["", "", "CHEMBL298734", "", "", "", ""],
-            "pubchem_cid_parent": ["", "", "chembl", "68165256", "", "", ""],
+            "pubchem_cid": ["", "", "chembl", "68165256", "", "", ""],
             "unii": ["", "", "chembl", "", "P76B05O5V6", "", ""],
             "drugbank_id": ["", "", "chembl", "", "", "DB09252", ""],
             "split_inchikey": ["", "", "CHEMBL", "", "", "", "GKDRMWXFWHEQQT"],
