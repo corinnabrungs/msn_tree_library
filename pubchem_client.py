@@ -389,6 +389,9 @@ def _get_pubchem_parent_cid(cid, orphans_as_self=True, try_n=1, max_tries=10) ->
     try:
         parent_cids = pubchempy.get_cids(identifier=cid, namespace='cid', domain='compound', cids_type='parent')
     except pubchempy.BadRequestError:
+        logging.info('Error getting parent of {}'.format(cid))
+        return None
+    except Exception:
         if try_n < max_tries:
             return _get_pubchem_parent_cid(cid, orphans_as_self, try_n + 1, max_tries)
         else:
