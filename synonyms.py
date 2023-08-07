@@ -6,7 +6,6 @@ import pandas as pd
 
 import pandas_utils
 from pandas_utils import get_or_else, get_unique_list, notnull, isnull
-from pubchem_client import pubchem_get_synonyms
 
 
 def ensure_synonyms_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -45,13 +44,6 @@ def add_synonyms(old_synonyms, new_synonyms, prepend: bool = True) -> list:
         new_synonyms = []
     all = new_synonyms + old_synonyms if prepend else old_synonyms + new_synonyms
     return get_unique_list(all)
-
-
-def get_first_synonym(compound):
-    synonyms = pubchem_get_synonyms(compound)
-    if synonyms is None or len(synonyms) <= 0:
-        return None
-    return synonyms[0]
 
 
 def find_unii(synonyms):
