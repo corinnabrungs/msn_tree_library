@@ -85,8 +85,8 @@ def save_results(df, metadata_file):
     """
     Overwrite parquet file and create cleaned metadata file as tsv or csv (depending on input)
     """
-    df = df.apply(lambda v: remove_line_breaks(v))
-    save_dataframe(df, add_filename_suffix(metadata_file, "cleaned"))
+    df = df.applymap(remove_line_breaks)
+    save_dataframe(df, add_filename_suffix(metadata_file, "cleaned", "tsv"))
     save_intermediate_parquet(df, metadata_file)
 
 
