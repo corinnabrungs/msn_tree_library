@@ -53,12 +53,16 @@ def read_dataframe(file):
     return df
 
 
-def save_dataframe(df, out_file):
+def save_dataframe(df: pd.DataFrame, out_file):
     logging.info("Exporting to file %s", out_file)
     if out_file.endswith(".tsv"):
-        df.to_csv(out_file, sep="\t", index=False)
+        # RFC 4180
+        df = all_lists_to_strings(df, ";")
+        df.to_csv(out_file, sep="\t", index=False, quotechar='"', escapechar='"', line_terminator="\n")
     elif out_file.endswith('.csv'):
-        df.to_csv(out_file, sep=",", index=False)
+        # RFC 4180
+        df = all_lists_to_strings(df, ";")
+        df.to_csv(out_file, sep=",", index=False, quotechar='"', escapechar='"', line_terminator="\n")
     elif out_file.endswith('.parquet'):
         df.to_parquet(out_file)
     elif out_file.endswith('.parquet.gz') or out_file.endswith('.parquet.gzip'):
@@ -67,6 +71,27 @@ def save_dataframe(df, out_file):
         df.to_feather(out_file)
     else:
         df.to_csv(out_file, sep=",", index=False)
+
+
+def all_lists_to_strings(df: pd.DataFrame, sep: str = ";") -> pd.DataFrame:
+    return df.applymap(lambda values: lists_to_strings(values, sep))
+
+
+def lists_to_strings(values, sep: str = ";"):
+    # this is something like a series, list, ndarray, etc.
+    if np.ndim(values) != 1:
+        return values
+
+    return sep.join([quote_csv_value(v) for v in values])
+
+
+def quote_csv_value(value, sep=";", quote='"'):
+    if isnull(value):
+        return value
+    value = str(value).replace(quote, quote * 2)
+    if quote in value or sep in value:
+        return '{}{}{}'.format(quote, value, quote)
+    return value
 
 
 def get_parquet_file(metadata_file, gzip=False):
@@ -122,9 +147,11 @@ def add_column_prefix(df: pd.DataFrame, prefix: str, columns_to_rename=None, col
     return df
 
 
-def remove_line_breaks(value: str | None, replace_str: str = " ") -> str | None:
+def remove_line_breaks(value: str | None, replace_str: str = " "):
     if isinstance(value, str):
         return value.replace("\n", replace_str).replace("\r", "")
+    if isinstance(value, list):
+        return [remove_line_breaks(v, replace_str) for v in value]
     else:
         return value
 
@@ -204,10 +231,12 @@ def left_merge_retain_index(main_index_df: pd.DataFrame, other_df: pd.DataFrame,
 
 
 def get_first_value_or_else(df: pd.DataFrame, column: str, default=None):
-    return next((v for v in df[column]), default)
+    return get_first_or_else(df[column], default)
 
 
 def get_first_or_else(collection, default=None):
+    if isnull(collection):
+        return default
     return next((v for v in collection), default)
 
 
