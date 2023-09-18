@@ -42,6 +42,7 @@ class MetaColumns(StrEnum):
     canonical_smiles = auto()
     isomeric_smiles = auto()
     iupac = auto()
+    logp = auto()
     # drugs
     first_approval = auto()
     clinical_phase = auto()

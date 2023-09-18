@@ -154,6 +154,8 @@ def _add_molid_columns(df) -> pd.DataFrame:
     df[MetaColumns.inchikey] = [inchikey_from_mol(mol) for mol in df["mol"]]
     df[MetaColumns.split_inchikey] = [split_inchikey(inchikey) for inchikey in df['inchikey']]
     df[MetaColumns.formula] = [formula_from_mol(mol) for mol in df["mol"]]
+    df[MetaColumns.logp] = [Descriptors.MolLogP(mol) if notnull(mol) else np.NAN
+                            for mol in df["mol"]]
 
     # merge all smiles from isomeric_smiles>canonical_smiles>smiles
     df = ensure_smiles_column(df)
