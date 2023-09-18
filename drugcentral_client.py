@@ -25,6 +25,12 @@ def drugcentral_search(df):
         results = df.progress_apply(lambda row: drugcentral_query.drugcentral_for_row(row), axis=1)
         logging.info("DrugCentral main search done")
 
+        # results may be all empty
+        if all(v[0] is None for v in results):
+            df[MetaColumns.date_drugcentral_search] = iso_datetime_now()
+            return df
+
+
         dc_df = sql_results_to_df(df, results)
         # rename some columns
         dc_df = dc_df.rename(columns={
