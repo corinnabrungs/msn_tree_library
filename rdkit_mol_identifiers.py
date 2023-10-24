@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import Descriptors, AllChem as Chem
-from rdkit.Chem import AllChem as Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
 from chembl_structure_pipeline import standardizer
@@ -68,7 +67,7 @@ def split_smiles_major_mol(smiles):
     """
     # find the longest smiles that might be the main molecule
     # for smiles that contain the salt partner etc
-    split_smiles = str(smiles).split('.')
+    split_smiles = str(smiles).split(".")
     if len(split_smiles) > 1:
         return max(split_smiles, key=len)
     else:
@@ -133,7 +132,7 @@ def clean_structure_add_mol_id_columns(df, drop_mol=True) -> pd.DataFrame:
     df = _add_molid_columns(df)
     df = _add_molid_columns(df)
     if drop_mol:
-        df = df.drop(columns=['mol'], errors="ignore")
+        df = df.drop(columns=["mol"], errors="ignore")
     return df
 
 
@@ -143,19 +142,29 @@ def _add_molid_columns(df) -> pd.DataFrame:
     # merge all smiles from isomeric_smiles>canonical_smiles>smiles
     df = ensure_smiles_column(df)
     # first strip any salts
-    df[MetaColumns.smiles] = [split_smiles_major_mol(smiles) if notnull(smiles) else np.NAN for smiles in df["smiles"]]
-    df["mol"] = [get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])]
-    df["mol"] = [chembl_standardize_mol(mol) if notnull(mol) else np.NAN for mol in df["mol"]]
+    df[MetaColumns.smiles] = [
+        split_smiles_major_mol(smiles) if notnull(smiles) else np.NAN
+        for smiles in df["smiles"]
+    ]
+    df["mol"] = [
+        get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])
+    ]
+    df["mol"] = [
+        chembl_standardize_mol(mol) if notnull(mol) else np.NAN for mol in df["mol"]
+    ]
     df[MetaColumns.canonical_smiles] = [mol_to_canon_smiles(mol) for mol in df["mol"]]
     df[MetaColumns.isomeric_smiles] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]
     df[MetaColumns.smarts] = [mol_to_smarts(mol) for mol in df["mol"]]
     df[MetaColumns.monoisotopic_mass] = [exact_mass_from_mol(mol) for mol in df["mol"]]
     df[MetaColumns.inchi] = [inchi_from_mol(mol) for mol in df["mol"]]
     df[MetaColumns.inchikey] = [inchikey_from_mol(mol) for mol in df["mol"]]
-    df[MetaColumns.split_inchikey] = [split_inchikey(inchikey) for inchikey in df['inchikey']]
+    df[MetaColumns.split_inchikey] = [
+        split_inchikey(inchikey) for inchikey in df["inchikey"]
+    ]
     df[MetaColumns.formula] = [formula_from_mol(mol) for mol in df["mol"]]
-    df[MetaColumns.logp] = [Descriptors.MolLogP(mol) if notnull(mol) else np.NAN
-                            for mol in df["mol"]]
+    df[MetaColumns.logp] = [
+        Descriptors.MolLogP(mol) if notnull(mol) else np.NAN for mol in df["mol"]
+    ]
 
     # merge all smiles from isomeric_smiles>canonical_smiles>smiles
     df = ensure_smiles_column(df)
@@ -173,7 +182,13 @@ def ensure_smiles_column(df: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={"isomerical_smiles": MetaColumns.isomeric_smiles})
 
     # ensure smiles column by priority
-    cols = [MetaColumns.isomeric_smiles, MetaColumns.canonical_smiles, MetaColumns.smiles, "SMILES", "Smiles"]
+    cols = [
+        MetaColumns.isomeric_smiles,
+        MetaColumns.canonical_smiles,
+        MetaColumns.smiles,
+        "SMILES",
+        "Smiles",
+    ]
     df = remove_empty_strings(df, cols)
 
     for col in cols:
