@@ -7,7 +7,7 @@ import lotus_client
 import unichem_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
-from drug_utils import get_clinical_phase_description
+from drug_utils import get_clinical_phase_description, map_clinical_phase_to_number
 from drugbank_client import drugbank_search_add_columns
 from drugcentral_client import drugcentral_search
 from lotus_client import apply_search_on_split_inchikey
@@ -22,6 +22,7 @@ from pandas_utils import (
     update_dataframes,
     remove_line_breaks,
     isnull,
+    create_missing_columns,
 )
 from pubchem_client import (
     pubchem_search_structure_by_name,
@@ -261,10 +262,26 @@ def cleanup_file(
         df = drugcentral_search(df)
         save_intermediate_parquet(df, metadata_file)
 
+    # Converting numbers
+    df = create_missing_columns(df, ["clinical_phase", "Clinical Information"])
+    df["clinical_phase"] = [
+        map_clinical_phase_to_number(phase) for phase in df["clinical_phase"]
+    ]
+    df["Clinical Information_clinical_phase"] = [
+        map_clinical_phase_to_number(phase) for phase in df["Clinical Information"]
+    ]
+
+    # Getting highest number
+    df["clinical_phase"] = df[
+        df.columns[df.columns.str.endswith("clinical_phase")]
+    ].max(axis=1)
+
     # Converting numbers back to phase X, launched or preclinic
     df["clinical_phase_description"] = [
         get_clinical_phase_description(number) for number in df["clinical_phase"]
     ]
+
+    df["any_phase"] = df["clinical_phase"] > 0
     # drop mol
     df = df.drop(columns=["mol", "pubchem"], errors="ignore")
     df["none"] = df.isnull().sum(axis=1)
