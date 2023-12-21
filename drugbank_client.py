@@ -16,6 +16,7 @@ from pandas_utils import (
     add_column_prefix,
     left_merge_retain_index,
 )
+from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -180,6 +181,9 @@ def drugbank_search_add_columns(df):
     df = create_missing_columns(df, ["drugbank_approved"])
     df["drugbank_clinical_phase"] = [
         map_drugbank_approval(status) for status in df["drugbank_approved"]
+    ]
+    df["drugbank_clinical_phase"] = [
+        map_clinical_phase_to_number(phase) for phase in df["drugbank_clinical_phase"]
     ]
 
     df[MetaColumns.date_drugbank_search] = iso_datetime_now()

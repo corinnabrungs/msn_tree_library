@@ -12,6 +12,7 @@ from pandas_utils import (
     update_dataframes,
     make_str_floor_to_int_number,
 )
+from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
 import datetime as dt
 
@@ -76,6 +77,10 @@ def chembl_search_id_and_inchikey(
     filtered["chembl_clinical_phase"] = [
         compound["max_phase"] for compound in compounds
     ]
+    filtered["chembl_clinical_phase"] = [
+        map_clinical_phase_to_number(phase)
+        for phase in filtered["chembl_clinical_phase"]
+    ]
     filtered["withdrawn"] = [compound["withdrawn_flag"] for compound in compounds]
     filtered[MetaColumns.first_approval] = pd.array(
         [compound["first_approval"] for compound in compounds], dtype=pd.Int64Dtype()
@@ -90,8 +95,10 @@ def chembl_search_id_and_inchikey(
     filtered["usan_stem_definition"] = [
         compound["usan_stem_definition"] for compound in compounds
     ]
-    filtered["indication"] = [compound["indication_class"] for compound in compounds]
-    filtered["atc_classifications"] = [
+    filtered["chembl_indication"] = [
+        compound["indication_class"] for compound in compounds
+    ]
+    filtered["chembl_atc_classifications"] = [
         compound["atc_classifications"] for compound in compounds
     ]
 

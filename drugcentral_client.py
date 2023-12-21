@@ -7,6 +7,7 @@ from date_utils import iso_datetime_now
 from drugcentral_postgresql_query import DRUGCENTRAL_ADD_SQL
 from meta_constants import MetaColumns
 from pandas_utils import notnull, update_dataframes, make_str_floor_to_int_number
+from drug_utils import map_clinical_phase_to_number
 
 import drugcentral_postgresql_query as drugcentral_query
 from rdkit_mol_identifiers import split_inchikey
@@ -65,10 +66,10 @@ def drugcentral_search(df):
         else:
             df["drugcentral_clinical_phase"] = None
 
-        df = pandas_utils.make_str_floor_to_int_number(
-            df,
-            ["drugcentral_clinical_phase"],
-        )
+        df["drugcentral_clinical_phase"] = [
+            map_clinical_phase_to_number(phase)
+            for phase in df["drugcentral_clinical_phase"]
+        ]
         return df
     finally:
         drugcentral_query.deconnect()

@@ -13,6 +13,8 @@ from pandas_utils import (
     read_dataframe,
 )
 
+from drug_utils import map_clinical_phase_to_number
+
 tqdm.pandas()
 
 

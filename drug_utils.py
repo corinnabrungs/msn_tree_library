@@ -1,5 +1,12 @@
+from pandas_utils import isnull
+
+
 def map_clinical_phase_to_number(phase):
-    match (str(phase)):
+    if isnull(phase):
+        return 0
+
+    cleanphase = str(phase).split("/")[-1].strip()
+    match (cleanphase):
         case "" | "None" | "NaN" | "nan" | "np.nan" | "0" | "No Development Reported":
             return 0
         case "Preclinical":
@@ -10,13 +17,16 @@ def map_clinical_phase_to_number(phase):
             return 2
         case "3" | "3.0" | "Phase 3":
             return 3
-        case "4" | "4.0" | "Phase 4" | "Launched":
+        case "4" | "4.0" | "Phase 4" | "Launched" | "Withdrawn":
             return 4
         case _:
-            return phase
+            return 0
 
 
 def get_clinical_phase_description(number):
+    if isnull(number):
+        return number
+
     match (str(number)):
         case "" | "None" | "NaN" | "nan" | "np.nan" | "0" | "0.0":
             return ""
