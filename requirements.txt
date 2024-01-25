@@ -6,12 +6,13 @@ molmass
 chembl_webresource_client
 SQLAlchemy
 psycopg2==2.9.4
+# psycopg2-binary
 rdkit==2023.3.2
 tqdm==4.64.1
 pubchempy==1.0.4
 pyteomics
 pyarrow
-prefect==2.10.10
+prefect
 StrEnum==0.4.10
 requests==2.28.1
 joblib==1.2.0

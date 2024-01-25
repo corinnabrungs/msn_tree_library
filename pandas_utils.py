@@ -64,7 +64,6 @@ def save_dataframe(df: pd.DataFrame, out_file):
             index=False,
             quotechar='"',
             escapechar='"',
-            line_terminator="\n",
         )
     elif out_file.endswith(".csv"):
         # RFC 4180
@@ -75,7 +74,6 @@ def save_dataframe(df: pd.DataFrame, out_file):
             index=False,
             quotechar='"',
             escapechar='"',
-            line_terminator="\n",
         )
     elif out_file.endswith(".parquet"):
         df.to_parquet(out_file)

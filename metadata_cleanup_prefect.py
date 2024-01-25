@@ -284,7 +284,7 @@ def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = Tru
             query_pubchem_by_name=True,
             # need local files
             query_broad_list=True,
-            query_drugbank_list=True,
+            query_drugbank_list=False,
             query_drugcentral=True,
             query_lotus=True,
         )
@@ -293,7 +293,13 @@ def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = Tru
         # exit(1)
 
 
+
+
 if __name__ == "__main__":
+    # full_cleanup_file(r"examples\test_metadata.tsv", lib_id="test")
+    full_cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test")
+    exit(0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_file",
@@ -308,8 +314,6 @@ if __name__ == "__main__":
     full_cleanup_file(args.input_file, args.lib_id)
     exit(0)
 
-    # full_cleanup_file(r"examples\test_metadata.tsv", lib_id="test")
-    # full_cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test")
 
     # cleanup_file("data\mce_library.tsv", id_columns=['Product Name', 'lib_plate_well', "inchikey"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
     #                  query_drugcentral=True)
