@@ -1,20 +1,25 @@
-pandas
-numpy
+pandas==1.4.2
+numpy==1.22.4
 seaborn
 jupyter
 molmass
 chembl_webresource_client
 SQLAlchemy
-psycopg2
-rdkit
-tqdm
-pubchempy
+psycopg2==2.9.4
+rdkit==2023.3.2
+tqdm==4.64.1
+pubchempy==1.0.4
 pyteomics
 pyarrow
-prefect
-StrEnum # remove in python 3.11
-requests
-joblib
+prefect==2.10.10
+StrEnum==0.4.10
+requests==2.28.1
+joblib==1.2.0
+
+PuLP==2.7.0
+networkx==3.1
+matplotlib==3.5.2
+SPARQLWrapper==2.0.0
 black[d]
 rustworkx
 
