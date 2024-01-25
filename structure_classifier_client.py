@@ -21,7 +21,7 @@ from rest_utils import (
 NP_CLASSIFIER_URL = "https://npclassifier.gnps2.org/classify?smiles={}"
 CLASSYFIRE_SMILES_URL = "https://structure.gnps2.org/classyfire?smiles={}"
 CLASSYFIRE_INCHI_URL = "https://structure.gnps2.org/classyfire?inchi={}"
-CLASSYFIRE_INCHIKEY_URL = "https://gnps-classyfire.ucsd.edu/entities/{}.json"
+CLASSYFIRE_INCHIKEY_URL = "https://classyfire.gnps2.org/entities/{}.json"
 
 CLASSYFIRE_PREFIX = "classyfire"
 NP_CLASSIFIER_PREFIX = "npclassifier"

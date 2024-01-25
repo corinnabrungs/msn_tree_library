@@ -15,5 +15,7 @@ prefect
 StrEnum # remove in python 3.11
 requests
 joblib
+black[d]
+rustworkx
 
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
