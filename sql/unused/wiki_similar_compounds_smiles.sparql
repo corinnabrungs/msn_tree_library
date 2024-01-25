@@ -1,0 +1,63 @@
+#+ summary: Structurallly similar to eugenol in taxa
+#+ description: How many compounds are structurally similar to eugenol and eugenyl acetate? Results are grouped by the parent taxon of the organism they were found in.
+#+ endpoint: https://query.wikidata.org/bigdata/namespace/wdq/sparql
+#+ pagination: 100
+#+ method: GET
+#+ tags:
+#+   - Natural products
+#+   - Structural similarity
+#+   - Eugenol
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wds: <http://www.wikidata.org/entity/statement/>
+PREFIX wdv: <http://www.wikidata.org/value/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
+PREFIX pq: <http://www.wikidata.org/prop/qualifier/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+PREFIX wdref: <http://www.wikidata.org/reference/>
+PREFIX psv: <http://www.wikidata.org/prop/statement/value/>
+PREFIX psn: <http://www.wikidata.org/prop/statement/value-normalized/>
+PREFIX pqv: <http://www.wikidata.org/prop/qualifier/value/>
+PREFIX pqn: <http://www.wikidata.org/prop/qualifier/value-normalized/>
+PREFIX pr: <http://www.wikidata.org/prop/reference/>
+PREFIX prv: <http://www.wikidata.org/prop/reference/value/>
+PREFIX prn: <http://www.wikidata.org/prop/reference/value-normalized/>
+PREFIX wdno: <http://www.wikidata.org/prop/novalue/>
+PREFIX wdata: <http://www.wikidata.org/wiki/Special:EntityData/>
+PREFIX schema: <http://schema.org/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX bds: <http://www.bigdata.com/rdf/search#>
+PREFIX gas: <http://www.bigdata.com/rdf/gas#>
+PREFIX hint: <http://www.bigdata.com/queryHints#>
+#title:How many compounds are structurally similar to eugenol and eugenyl acetate? Results are grouped by the parent taxon of the organism they were found in.
+PREFIX sachem: <http://bioinfo.uochb.cas.cz/rdf/v1.0/sachem#>
+# prefixes needed for structural similarity search
+PREFIX idsm: <https://idsm.elixir-czech.cz/sparql/endpoint/>
+SELECT ?parent_taxon ?parent_taxon_name (COUNT(DISTINCT ?compound) AS ?count) WHERE {
+  SERVICE idsm:wikidata {
+    SERVICE <https://query.wikidata.org/bigdata/namespace/wdq/sparql> {
+      VALUES ?derivatives {
+        wd:Q423357
+        wd:Q27116129
+      }
+      ?derivatives wdt:P233 ?smiles.
+    }
+    ?compound sachem:similarCompoundSearch _:b40.
+    _:b40 sachem:query ?smiles;
+    sachem:cutoff "0.85"^^xsd:double. # similarity cut-off
+  }
+  hint:Prior hint:runFirst "true"^^xsd:boolean.
+  ?compound wdt:P703 ?taxon.
+  ?taxon wdt:P171 ?parent_taxon.
+  OPTIONAL { ?parent_taxon wdt:P225 ?parent_taxon_name. }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+}
+GROUP BY ?parent_taxon ?parent_taxon_name
+ORDER BY DESC (?count)
