@@ -14,27 +14,7 @@ logger = logging.getLogger(__name__)
 
 files_and_lib_ids = [
     # (r"examples\test_metadata.tsv", "test"),
-    # (r"examples\test_metadata_small.tsv", "test"),
-    # (r"data\library\mce_library_all.tsv", "pluskal_mce"),
-    # (r"data\library\mce_library_add_compounds.tsv", "pluskal_mce"),
-    # (r"data\nih\nih_library_test.csv", "pluskal_nih"),
-    # (r"data\nih\nih_library_new_headers.tsv", "pluskal_nih"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library_small.csv", "gnps"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library.csv", "gnps"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library_chunk0.csv", "gnps"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library_chunk1.csv", "gnps"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library_chunk2.csv", "gnps"),
-    # (r"C:\git\msn_library\data\gnpslib\library_cleanup\gnps_library_chunk3.csv", "gnps"),
-    # (r"C:\git\msn_library\data\tito\tito_lib.tsv", "tito"),
-    # (
-    #     r"C:\git\msn_library\data\iocb_libraries\Veverka_group\Molport_PACKING_DATA.csv",
-    #     "pluskal_veverka_molport_packing_data",
-    # ),
-    (
-        r"C:\git\msn_library\data\pluskal_compounds\milana_fimbriulatum_alkaloids.tsv",
-        "milana_fimbriulatum_alkaloids",
-    ),
-    # (r"C:\git\msn_library\data\compound_libraries\raw_data\selleckchem_subset_L5000-1w.tsv", "selleckchem_subset"),
+    (r"examples\test_metadata_small.tsv", "test"),
 ]
 
 if __name__ == "__main__":
@@ -46,7 +26,7 @@ if __name__ == "__main__":
             metadata_cleanup_prefect.cleanup_file(
                 input_file,
                 lib_id,
-                use_cached_parquet_file=False,
+                use_cached_parquet_file=True,
                 query_pubchem_by_name=True,
                 query_pubchem_by_cid=True,
                 query_unichem=True,
@@ -54,10 +34,10 @@ if __name__ == "__main__":
                 query_npatlas=True,
                 query_classyfire=True,
                 # need local files
-                query_broad_list=True,
-                query_drugbank_list=True,
-                query_drugcentral=True,
-                query_lotus=True,
+                query_broad_list=False,
+                query_drugbank_list=False,
+                query_drugcentral=False,
+                query_lotus=False,
             )
         except:
             logging.exception("Exception in flow")
