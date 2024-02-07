@@ -70,13 +70,13 @@ def wellplate_piegrid(
         )
 
     last_pie = None
-    # create pies
+    # create pies, wedgeprops to remove white border of wedges
     for i, (idx, row) in enumerate(df.iterrows()):
         well = row[well_column]
         y = ord(well[:1]) - 64  # A is 65
         x = int(well[1:])
         data = [row[group] for group in data_columns]
-        axs[y, x].pie(data, labels=None, colors=colors)
+        axs[y, x].pie(data, labels=None, colors=colors, wedgeprops={"linewidth": 0})
         axs[y, x].axis("on")
         last_pie = axs[y, x]
 
