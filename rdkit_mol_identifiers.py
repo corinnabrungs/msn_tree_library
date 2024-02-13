@@ -9,6 +9,7 @@ from chembl_structure_pipeline import standardizer
 
 from meta_constants import MetaColumns
 from pandas_utils import notnull, isnull, remove_empty_strings
+import rdkit_functional_group
 
 
 # returns canonical smiles
@@ -165,6 +166,8 @@ def _add_molid_columns(df) -> pd.DataFrame:
     df[MetaColumns.logp] = [
         Descriptors.MolLogP(mol) if notnull(mol) else np.NAN for mol in df["mol"]
     ]
+    # counting specific function groups
+    rdkit_functional_group.count_functional_groups(df, df["mol"])
 
     # merge all smiles from isomeric_smiles>canonical_smiles>smiles
     df = ensure_smiles_column(df)
