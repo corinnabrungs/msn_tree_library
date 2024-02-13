@@ -16,7 +16,7 @@ class FunctionalGroup:
 
 hydroxy = FunctionalGroup("hydroxy", "[OX2H]")
 hydroxy_aliphatic = FunctionalGroup("hydroxy_aliphatic", "[CX4][OX2H]")
-phenole = FunctionalGroup("phenole", "[OX2H][cX3]:[c]")
+phenole = FunctionalGroup("phenole", "[OX2H]c")
 sulfuric_acid_and_ester = FunctionalGroup(
     "sulfuric_acid_and_ester", "[$([SX4](=O)(=O)(O)O),$([SX4+2]([O-])([O-])(O)O)]"
 )
@@ -29,30 +29,30 @@ sulfuric_acid_diester = FunctionalGroup(
     "[$([#16X4](=[OX1])(=[OX1])([OX2][#6])[OX2][#6]),$([#16X4](=[OX1])(=[OX1])([OX2][#6])[OX2][#6])]",
 )
 carbonyl = FunctionalGroup("carbonyl", "[CX3]=[OX1]")
-carbonyl_carbon = FunctionalGroup("carbonyl_carbon", "[CX3](=[OX1])C")
-carbonyl_nitrogen = FunctionalGroup("carbonyl_nitrogen", "[OX1]=CN")
-carbonyl_oxygen = FunctionalGroup("carbonyl_oxygen", "[CX3](=[OX1])O")
 acyl_halide = FunctionalGroup("acyl_halide", "[CX3](=[OX1])[F,Cl,Br,I]")
 aldehyde = FunctionalGroup("aldehyde", "[CX3H1](=O)[#6]")
+ketone = FunctionalGroup("ketone", "[#6][CX3](=O)[#6]")
+carboxylic_acid = FunctionalGroup("carboxylic_acid", "[CX3](=O)[OX2H,OX1H0-]")
+ester = FunctionalGroup("ester", "[#6][CX3](=O)[OX2H0][#6]")
+lactone = FunctionalGroup("lactone", "[$([O;R]@[C;R](=O))]")
 anhydride = FunctionalGroup("anhydride", "[CX3](=[OX1])[OX2][CX3](=[OX1])")
-amide = FunctionalGroup("amide", "[#6][NX3][CX3](=[OX1])[#6]")
+amide = FunctionalGroup("amide", "[#7X3][#6X3](=O)")
+prim_amide = FunctionalGroup("prim_amide", "[#7X3H2][#6X3](=[OX1])[#6]")
+second_amide = FunctionalGroup("second_amide", "[#6][#7X3H1][#6X3](=[OX1])[#6]")
+tert_amide = FunctionalGroup("tert_amide", "[#6][#7X3]([#6])[#6X3](=[OX1])[#6]")
 general_amide = FunctionalGroup("general_amide", "[NX3][CX3](=[OX1])[#6]")
 amidinium = FunctionalGroup("amidinium", "[NX3][CX3]=[NX3+]")
 carbamate = FunctionalGroup("carbamate", "[NX3,NX4+][CX3](=[OX1])[OX2,OX1-]")
-carbonic_acid_and_ester = FunctionalGroup(
-    "carbonic_acid_and_ester", "[CX3](=[OX1])(O)O"
-)
-carboxylic_acid = FunctionalGroup("carboxylic_acid", "[CX3](=O)[OX2H1]")
 cyanamide = FunctionalGroup("cyanamide", "[NX3][CX2]#[NX1]")
-ester = FunctionalGroup("ester", "[#6][CX3](=O)[OX2H0][#6]")
-ketone = FunctionalGroup("ketone", "[#6][CX3](=O)[#6]")
-primary_amine = FunctionalGroup(
-    "primary_amine", "[NX3;H2;!$(NC=[!#6]);!$(NC#[!#6])][#6]"
+prim_amine = FunctionalGroup(
+    "prim_amine", "[NX3;H2;!$([#7]C=[!#6]);!$([#7]C#[!#6])][#6]"
 )
-secondary_amine = FunctionalGroup("secondary_amine", "[NX3H1;!$(NC=O)]")
+second_amine = FunctionalGroup("second_amine", "[#7X3H1;!$([#7][#6]=O)]")
+tert_amine = FunctionalGroup("tert_amine", "[#7X3H0;!$([#7][#6]=O)]")
+quart_amine = FunctionalGroup("quart_amine", "[#7X4H0+;!$([#7][#6]=O)]")
 enamine = FunctionalGroup("enamine", "[NX3][CX3]=[CX3]")
 aniline = FunctionalGroup("aniline", "[NH2X3](cc)")
-aromatic_amine = FunctionalGroup("aromatic_amine", "[NX3H2][$(cc)]")
+prim_aromatic_amine = FunctionalGroup("aromatic_amine", "[NX3H2][$(c)]")
 amino_acid = FunctionalGroup("amino_acid", "[NX3,NX4+][CX4H]([*])[CX3](=[OX1])[O,N]")
 guanidine = FunctionalGroup(
     "guanidine", "[#6X3]([#7])(:,=[#7X2])[#7X3]"  # allow aromatic or double bond
@@ -86,9 +86,13 @@ sulfoxide = FunctionalGroup("sulfoxide", "[$([#16X3]=[OX1]),$([#16X3+][OX1-])]")
 sulfone = FunctionalGroup(
     "sulfone", "[$([#16X4](=[OX1])=[OX1]),$([#16X4+2]([OX1-])[OX1-])]"
 )
-sulfonate = FunctionalGroup(
-    "sulfonate",
+sulfonic_ester = FunctionalGroup(
+    "sulfonic_ester",
     "[$([#16X4](=[OX1])(=[OX1])([#6])[OX2H0]),$([#16X4+2]([OX1-])([OX1-])([#6])[OX2H0])]",
+)
+sulfonic_acid = FunctionalGroup(
+    "sulfonic_acid",
+    "[$([#16X4](=[OX1])(=[OX1])([#6])[OX2H,OX1H0-]),$([#16X4+2]([OX1-])([OX1-])([#6])[OX2H,OX1H0-])]",
 )
 # name = FunctionalGroup("name", "place")
 # name = FunctionalGroup("name", "place")
@@ -102,26 +106,27 @@ default_groups = [
     sulfuric_acid_and_ester,
     sulfuric_acid_diester,
     carbonyl,
-    carbonyl_carbon,
-    carbonyl_nitrogen,
-    carbonyl_oxygen,
     acyl_halide,
     aldehyde,
     anhydride,
     amide,
+    prim_amide,
+    second_amide,
+    tert_amide,
     general_amide,
     amidinium,
     carbamate,
-    carbonic_acid_and_ester,
     carboxylic_acid,
     cyanamide,
     ester,
     ketone,
-    primary_amine,
-    secondary_amine,
+    prim_amine,
+    second_amine,
+    tert_amine,
+    quart_amine,
     enamine,
     aniline,
-    aromatic_amine,
+    prim_aromatic_amine,
     amino_acid,
     guanidine,
     azo_nitrogen,
@@ -139,7 +144,8 @@ default_groups = [
     carbo_thioester,
     sulfoxide,
     sulfone,
-    sulfonate,
+    sulfonic_ester,
+    sulfonic_acid,
 ]
 
 
