@@ -308,6 +308,17 @@ def create_missing_columns(df: pd.DataFrame, required_cols):
     return df
 
 
+def astype_int(df: pd.DataFrame, columns) -> pd.DataFrame:
+    if len(df) == 0:
+        return df
+
+    if isinstance(columns, str):
+        columns = [columns]
+    for col in columns:
+        df[col] = df[col].astype("Int32")
+    return df
+
+
 def make_str_floor_to_int_number(df: pd.DataFrame, columns) -> pd.DataFrame:
     """
     Works in place. changes all input columns to str, splits at . and takes the first part to ensure integers.
