@@ -1,22 +1,25 @@
+import unittest
 from unittest import TestCase
-import rdkit_functional_group as fg
 import rdkit.Chem as Chem
 from dataclasses import dataclass
+
+from rdkit_functional_group import count_functional_group, FunctionalGroup
+from rdkit_functional_group import FunctionalGroups as fg
 
 
 def mol(smiles):
     return Chem.MolFromSmiles(smiles)
 
 
-def count(group: fg.FunctionalGroup, smiles: str):
-    return fg.count_functional_group(group, mol(smiles))
+def count(group: FunctionalGroup, smiles: str):
+    return count_functional_group(group, mol(smiles))
 
 
 @dataclass
 class Case:
     expected_matches: int
     smiles: str
-    group: fg.FunctionalGroup
+    group: FunctionalGroup
 
 
 class Test(TestCase):
@@ -32,6 +35,7 @@ class Test(TestCase):
         folic_acid = "C1=CC(=CC=C1C(=O)NC(CCC(=O)O)C(=O)O)NCC2=CN=C3C(=N2)C(=O)NC(=N3)N"
         folate = "C1=CC(=CC=C1C(=O)NC(CCC(=O)[O-])C(=O)O)NCC2=CN=C3C(=N2)C(=O)NC(=N3)N"
         lecitinpc = "CCCCCCCCCCCCCCCC(=O)OCC(COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCCC=CCC=CCCCCC"
+        penicillin_g = "CC1(C(N2C(S1)C(C2=O)NC(=O)CC3=CC=CC=C3)C(=O)O)C"
 
         cases = [
             Case(2, CH5132799, fg.guanidine),
@@ -54,7 +58,7 @@ class Test(TestCase):
             Case(0, fostemsavir_trom, fg.prim_aromatic_amine),
             Case(1, fostemsavir_trom, fg.prim_amine),
             Case(0, fostemsavir_trom, fg.second_amine),
-            # Case(0, fostemsavir_trom, fg.tert_amine),
+            Case(2, fostemsavir_trom, fg.tert_amine),
             Case(0, fostemsavir_trom, fg.quart_amine),
             Case(0, fostemsavir_trom, fg.enamine),
             Case(0, fostemsavir_trom, fg.enole),
@@ -106,6 +110,15 @@ class Test(TestCase):
             Case(1, lecitinpc, fg.phosphoric_ester),
             Case(0, lecitinpc, fg.lactone),
             Case(2, lecitinpc, fg.ester),
+            Case(0, penicillin_g, fg.lactone),
+            Case(1, penicillin_g, fg.lactam),
+            Case(1, penicillin_g, fg.carboxylic_acid),
+            Case(2, penicillin_g, fg.amide),
+            Case(0, penicillin_g, fg.prim_amide),
+            Case(1, penicillin_g, fg.second_amide),
+            Case(1, penicillin_g, fg.tert_amide),
+            Case(2, penicillin_g, fg.amino_acid),
+            Case(0, penicillin_g, fg.ketone),
         ]
 
         for case in cases:
@@ -114,7 +127,7 @@ class Test(TestCase):
             self.assertEqual(
                 case.expected_matches,
                 found,
-                f"{group.name} smarts {group.smarts} failed count in {case.smiles}",
+                f"{group.group} smarts {group.smarts} failed count in {case.smiles}",
             )
 
 
