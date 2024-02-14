@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import pandas_utils as pu
 import numpy as np
+from smarts_utils import combine_smarts
 
 
 @dataclass
@@ -15,10 +16,14 @@ class FunctionalGroup:
         self.pattern = Chem.MolFromSmarts(self.smarts)
 
 
+def combine(groups):
+    return combine_smarts([gr[1] for gr in groups])
+
+
 class FunctionalGroups(FunctionalGroup, Enum):
     hydroxy = ("hydroxy", "[OX2H]")
     hydroxy_aliphatic = ("hydroxy_aliphatic", "[CX4][OX2H]")
-    phenole = ("phenole", "[OX2H]c")
+    hydroxy_aromatic = ("hydroxy_aromatic", "[OX2H]c")
     sulfuric_acid_and_ester = (
         "sulfuric_acid_and_ester",
         "[$([SX4](=O)(=O)(O)O),$([SX4+2]([O-])([O-])(O)O)]",
@@ -92,9 +97,40 @@ class FunctionalGroups(FunctionalGroup, Enum):
         "sulfonic_acid",
         "[$([#16X4](=[OX1])(=[OX1])([#6])[OX2H,OX1H0-]),$([#16X4+2]([OX1-])([OX1-])([#6])[OX2H,OX1H0-])]",
     )
-    # name = ("name", "place")
-    # name = ("name", "place")
-    # name = ("name", "place")
+    hexose = (
+        "hexose",
+        "[$(C(C1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2])[OX2]),$(C(C1C(C(C([O]-1)(C[OX2])[OX2])[OX2])[OX2])[OX2])]",
+    )
+    deoxy_hexose = (
+        "deoxy_hexose",
+        "[C;!$([#6][#8])](C1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2])",
+    )
+    pentose = (
+        "pentose",
+        "[$([C;!$([C][C])]1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2]),$(C(C1(C(C([C;!$([C][C])]([O]-1)[OX2])[OX2])[OX2]))[OX2])]",
+    )
+    glycoside = (
+        "glycoside",
+        combine([hexose, pentose, deoxy_hexose]),
+    )
+    flavan = (
+        "flavan",
+        "[#6]1-[#6]-[#6]2:[#6]:[#6]:[#6]:[#6]:[#6]:2-[#8]-[#6]-1-[#6]1:[#6]:[#6]:[#6]:[#6]:[#6]:1",
+    )
+    isoflavan = (
+        "isoflavan",
+        "[#6]1-[#6](-[#6]-[#8]-[#6]2:[#6]:[#6]:[#6]:[#6]:[#6]:2-1)-[#6]1:[#6]:[#6]:[#6]:[#6]:[#6]:1",
+    )
+    flavone = (
+        "flavone",
+        "[#6]1:[#6]:[#6]:[#6](:[#6]:[#6]:1)-[#6]1:[#6]:[#6](=[#8]):[#6]2:[#6]:[#6]:[#6]:[#6]:[#6]:2:[#8]:1",
+    )
+    isoflavone = (
+        "isoflavone",
+        "[#6]1:[#6]:[#6]:[#6](:[#6]:[#6]:1)-[#6]1:[#6]:[#8]:[#6]2:[#6]:[#6]:[#6]:[#6]:[#6]:2:[#6]:1=[#8]",
+    )
+    steroid = ("steroid", "[#6]1-[#6]-[#6]-[#6]2-[#6](-[#6]-1)-[#6]-[#6]-[#6]1-[#6]-2-[#6]-[#6]-[#6]2-[#6]-1-[#6]-[#6]-[#6]-2")
+    # name = ("name", "C(C1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2])[!#8]")
 
 
 def count_functional_groups(
