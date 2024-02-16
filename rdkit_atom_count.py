@@ -30,7 +30,7 @@ def count_element_atoms_df(
     df, mol_col, elements: list[Element] = Elements
 ) -> pd.DataFrame:
     # also count H
-    mol_col_h = [Chem.AddHs(mol) for mol in mol_col]
+    mol_col_h = [Chem.AddHs(mol) if pu.notnull(mol) else None for mol in mol_col]
 
     for element in elements:
         col = f"at_n_{element.symbol}"
@@ -39,5 +39,8 @@ def count_element_atoms_df(
     return df
 
 
-def count_element(mol: Chem.rdchem.Mol, number: int) -> int:
-    return sum(1 for atom in mol.GetAtoms() if atom.GetAtomicNum() == number)
+def count_element(mol: Chem.rdchem.Mol, number: int):
+    if pu.notnull(mol):
+        return sum(1 for atom in mol.GetAtoms() if atom.GetAtomicNum() == number)
+    else:
+        return np.NAN

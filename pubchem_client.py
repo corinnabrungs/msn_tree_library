@@ -35,10 +35,7 @@ def prepend_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
     try:
         pc_synonyms = [pubchem_get_synonyms(compound) for compound in df["pubchem"]]
         df = synonyms.ensure_synonyms_column(df)
-        df[MetaColumns.synonyms] = [
-            synonyms.add_synonyms(old, new)
-            for new, old in zip(pc_synonyms, df["synonyms"])
-        ]
+        df = synonyms.add_synonyms_columns(df, new_synonyms=pc_synonyms, prepend=True)
     except:
         logging.exception("No synonyms")
     return df
@@ -94,9 +91,7 @@ def transform_pubchem_columns(
     ]
     filtered["pubchem_logp"] = [compound.xlogp for compound in filtered["pubchem"]]
     filtered = prepend_pubchem_synonyms(filtered)
-    filtered[MetaColumns.compound_name] = [
-        get_first_or_else(synonyms) for synonyms in filtered[MetaColumns.synonyms]
-    ]
+    filtered = synonyms.use_first_synonym_as_compound_name(filtered)
     if apply_structures:
         filtered[MetaColumns.isomeric_smiles] = [
             compound.isomeric_smiles for compound in filtered["pubchem"]

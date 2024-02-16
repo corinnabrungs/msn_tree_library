@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from chembl_webresource_client.new_client import new_client as chembl
 
+import synonyms
 from date_utils import create_expired_entries_dataframe, iso_datetime_now
 from meta_constants import MetaColumns
 from pandas_utils import (
@@ -11,6 +12,7 @@ from pandas_utils import (
     isnull,
     update_dataframes,
     make_str_floor_to_int_number,
+    get_unique_list,
 )
 from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
@@ -121,11 +123,25 @@ def chembl_search_id_and_inchikey(
     # filtered["withdrawn_year"] = pd.array([compound["withdrawn_year"] for compound in compounds], dtype=pd.Int64Dtype())
     # filtered["withdrawn_country"] = [compound["withdrawn_country"] for compound in compounds]
 
-    ## dont overwrite
-    # filtered["synonyms"] = filtered["synonyms"] + [compound["molecule_synonyms"] if notnull(compound) else [] for
-    # compound in compounds]
+    # add new synonyms
+    new_synonyms = [extract_synonyms(compound) for compound in compounds]
+    filtered = synonyms.add_synonyms_columns(
+        filtered, new_synonyms=new_synonyms, prepend=False
+    )
 
     # combine new data with old rows that were not processed
     return update_dataframes(filtered, df).drop(
         columns=["result_column"], errors="ignore"
     )
+
+
+def extract_synonyms(compound) -> list:
+    if isnull(compound):
+        return []
+
+    synonym_dict = compound["molecule_synonyms"]
+    if isnull(synonym_dict) or len(synonym_dict) == 0:
+        return []
+
+    new_synonyms = [syn["molecule_synonym"].strip() for syn in synonym_dict]
+    return get_unique_list(new_synonyms)

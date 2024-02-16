@@ -57,7 +57,7 @@ def save_dataframe(df: pd.DataFrame, out_file):
     logging.info("Exporting to file %s", out_file)
     if out_file.endswith(".tsv"):
         # RFC 4180
-        df = all_lists_to_strings(df, ";")
+        # df = all_lists_to_strings(df, ";")
         df.to_csv(
             out_file,
             sep="\t",
@@ -67,7 +67,7 @@ def save_dataframe(df: pd.DataFrame, out_file):
         )
     elif out_file.endswith(".csv"):
         # RFC 4180
-        df = all_lists_to_strings(df, ";")
+        # df = all_lists_to_strings(df, ";")
         df.to_csv(
             out_file,
             sep=",",
@@ -94,7 +94,7 @@ def lists_to_strings(values, sep: str = ";"):
     if np.ndim(values) != 1:
         return values
 
-    return sep.join([quote_csv_value(v) for v in values])
+    return sep.join([quote_csv_value(v) for v in values if notnull(v)])
 
 
 def quote_csv_value(value, sep=";", quote='"'):

@@ -146,7 +146,7 @@ def count_functional_groups(
     return df
 
 
-def count_functional_group(group, mol) -> int:
+def count_functional_group(group, mol):
     if pu.notnull(mol):
         return len(mol.GetSubstructMatches(group.pattern))
     else:

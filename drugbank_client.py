@@ -106,8 +106,12 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    # if isnull(dbid) and row["synonyms"]:
-    #     dbid = next((d for d in drugbank_df[drugbank_df["compound_name"] in row["synonyms"]]["drugbank_id"]), None)
+    if isnull(dbid) and row["synonyms"]:
+        lower_synonyms = [s.lower().strip() for s in row["synonyms"] if notnull(s)]
+        filtered_dbank_df = drugbank_df[
+            drugbank_df["lower_case_compound_name"].isin(lower_synonyms)
+        ]
+        dbid = next((d for d in filtered_dbank_df["drugbank_id"]), None)
     return dbid
 
 
@@ -116,6 +120,10 @@ def drugbank_list_search(df: pd.DataFrame):
     # drugbank_extraction.py
     prefix = "drugbank_"
     drugbank_df = pd.read_csv("data/drugbank.tsv", sep="\t")
+    drugbank_df["lower_case_compound_name"] = [
+        cname.lower().strip() if notnull(cname) else None
+        for cname in drugbank_df["compound_name"]
+    ]
     drugbank_df = make_str_floor_to_int_number(drugbank_df, MetaColumns.pubchem_cid)
 
     if "split_inchikey" not in df and "inchikey" in df:

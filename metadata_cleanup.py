@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import lotus_client
+import synonyms
 import unichem_client
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
@@ -104,6 +105,7 @@ def save_intermediate_parquet(df, metadata_file):
     Overwrite parquet file
     """
     df = df.drop(columns=["pubchem"], errors="ignore")
+    df = synonyms.use_first_synonym_as_compound_name(df)
     save_dataframe(df, get_parquet_file(metadata_file))
 
 
@@ -112,6 +114,7 @@ def save_results(df, metadata_file):
     Overwrite parquet file and create cleaned metadata file as tsv or csv (depending on input)
     """
     df = df.applymap(remove_line_breaks)
+    df = synonyms.use_first_synonym_as_compound_name(df)
     save_dataframe(df, add_filename_suffix(metadata_file, "cleaned", "tsv"))
     save_intermediate_parquet(df, metadata_file)
 

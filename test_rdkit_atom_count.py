@@ -2,10 +2,12 @@ import unittest
 from unittest import TestCase
 
 import pandas as pd
+import numpy as np
 
 import rdkit_atom_count as ac
 import rdkit.Chem as Chem
 from rdkit_atom_count import Elements
+import pandas_utils as pu
 
 
 def count_atom(smiles, element: Elements):
@@ -13,8 +15,8 @@ def count_atom(smiles, element: Elements):
 
 
 def mol(smiles):
-    mol = Chem.MolFromSmiles(smiles)
-    mol = Chem.AddHs(mol)
+    mol = Chem.MolFromSmiles(smiles) if pu.notnull(smiles) else np.NAN
+    mol = Chem.AddHs(mol) if pu.notnull(mol) else np.NAN
     return mol
 
 
@@ -24,6 +26,12 @@ class Test(TestCase):
         self.check(6, Elements.C, phenol)
         self.check(1, Elements.O, phenol)
         self.check(6, Elements.H, phenol)
+
+    def test_count_element_empty(self):
+        empty = ""
+        self.check(0, Elements.C, empty)
+        self.check(0, Elements.O, empty)
+        self.check(0, Elements.H, empty)
 
     def test_count_element_df(self):
         df = pd.DataFrame({"mol": [mol("C1=CC=C(C=C1)O")]})
