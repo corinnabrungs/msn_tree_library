@@ -38,7 +38,7 @@ from structures
 left join synonyms syn on structures.id = syn.id
 left join pharma_class pc on structures.id = pc.struct_id
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """,
@@ -50,7 +50,7 @@ from structures
 left join active_ingredient ai on structures.id = ai.struct_id
 left join inn_stem stem on structures.stem = stem.stem
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """,
@@ -62,7 +62,7 @@ from structures
 left join struct2parent s2p on structures.id = s2p.struct_id
 left join struct2obprod str on structures.id = str.struct_id
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """,
@@ -74,7 +74,7 @@ from structures
 left join atc_ddd on structures.id = atc_ddd.struct_id
 left join struct2atc s2atc on structures.id = s2atc.struct_id
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """,
@@ -84,7 +84,7 @@ select structures.id,
 from structures
 left join omop_relationship o on structures.id = o.struct_id
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """,
@@ -108,21 +108,21 @@ left join struct2obprod str on structures.id = str.struct_id
 left join vetomop v on structures.id = v.struct_id
 
 -- condition defined in code
-where structures.id = '{}'
+where structures.id = %s
 GROUP BY structures.id
 limit 1;
 """
 
 #  dict column name in our dataframe, and the SQL query where condition
 EXTERNAL_IDS = {
-    "unii": "i.id_type = 'UNII' and i.identifier = '{}'",
-    "drugbank_id": "i.id_type = 'DRUGBANK_ID' and i.identifier = '{}'",
-    "chembl_id": "i.id_type = 'ChEMBL_ID' and i.identifier = '{}'",
-    "pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
-    "input_pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = '{}'",
-    "inchikey": "structures.inchikey = '{}'",
-    "compound_name": "lower(structures.name) ~ lower('{}')",
-    "split_inchikey": "structures.inchikey ~ '^{}'",
+    "unii": "i.id_type = 'UNII' and i.identifier = %s",
+    "drugbank_id": "i.id_type = 'DRUGBANK_ID' and i.identifier = %s",
+    "chembl_id": "i.id_type = 'ChEMBL_ID' and i.identifier = %s",
+    "pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = %s",
+    "input_pubchem_cid": "i.id_type = 'PUBCHEM_CID' and i.identifier = %s",
+    "inchikey": "structures.inchikey = %s",
+    "compound_name": "lower(structures.name) = lower(%s)",
+    "split_inchikey": "structures.inchikey ~ %s",
 }
 
 conn = None
@@ -207,20 +207,22 @@ def drugcentral_for_row(row):
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)
+                if column_name == "split_inchikey":
+                    value = f"^{value}"  # regular expression match: startswith
                 if notnull(value) and len(str(value)) > 0:
                     with conn.cursor() as cur:
                         try:
-                            query = DRUGCENTRAL_SQL.format(
-                                sql_condition.format(str(value))
-                            )
+                            query = DRUGCENTRAL_SQL.format(sql_condition)
                             # logging.info(query)
-                            cur.execute(query)
+                            cur.execute(query, (value,))
                             structure = cur.fetchone()
                             if structure:
                                 return cur.description, structure
                         except Exception as err:
                             # pass exception to function
-                            logging.exception("Error in postgresql drugcentral query")
+                            logging.exception(
+                                f"Error in postgresql drugcentral query for {column_name} with value {value}"
+                            )
                             # rollback the previous transaction before starting another
                             conn.rollback()
 
@@ -244,9 +246,9 @@ def drugcentral_additional_query(dc_id, sql_query):
             if notnull(dc_id) and len(str(dc_id)) > 0:
                 with conn.cursor() as cur:
                     try:
-                        query = sql_query.format(str(dc_id))
+                        # query = sql_query.format(str(dc_id))
                         # logging.info(query)
-                        cur.execute(query)
+                        cur.execute(sql_query, (dc_id,))
                         structure = cur.fetchone()
                         if structure:
                             return cur.description, structure
