@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import pandas_utils
+import synonyms
 from date_utils import iso_datetime_now
 from drugcentral_postgresql_query import DRUGCENTRAL_ADD_SQL
 from meta_constants import MetaColumns
@@ -57,6 +58,11 @@ def drugcentral_search(df):
 
         dc_df[MetaColumns.date_drugcentral_search] = iso_datetime_now()
         df = update_dataframes(dc_df, df).copy()
+
+        syncol = f"{prefix}synonyms"
+        df = synonyms.add_synonyms_columns(
+            df, new_syn_column_header=syncol, prepend=False
+        )
 
         if "drugcentral_administration" in df.columns:
             df["drugcentral_clinical_phase"] = [

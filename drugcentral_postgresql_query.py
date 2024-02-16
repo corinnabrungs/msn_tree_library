@@ -87,7 +87,7 @@ left join omop_relationship o on structures.id = o.struct_id
 where structures.id = '{}'
 GROUP BY structures.id
 limit 1;
-"""
+""",
 ]
 
 DRUGCENTRAL_ADD2_SQL = """
@@ -140,7 +140,7 @@ INFO = """
 """
 
 
-def config(filename='drugcentral_database.ini', section='postgresql'):
+def config(filename="drugcentral_database.ini", section="postgresql"):
     # create a parser
     parser = ConfigParser()
     # read config file
@@ -153,7 +153,9 @@ def config(filename='drugcentral_database.ini', section='postgresql'):
         for param in params:
             db[param[0]] = param[1]
     else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+        raise Exception(
+            "Section {0} not found in the {1} file".format(section, filename)
+        )
 
     return db
 
@@ -165,13 +167,13 @@ def connect():
         params = config()
 
         # connect to the PostgreSQL server
-        print('Connecting to the PostgreSQL database...')
+        print("Connecting to the PostgreSQL database...")
         conn = psycopg2.connect(**params)
 
         # execute a statement
-        print('PostgreSQL database version:')
+        print("PostgreSQL database version:")
         with conn.cursor() as cur:
-            cur.execute('SELECT version()')
+            cur.execute("SELECT version()")
             # display the PostgreSQL database server version
             db_version = cur.fetchone()
             print(db_version)
@@ -187,7 +189,7 @@ def deconnect():
     is_connected = False
     if conn is not None:
         conn.close()
-        print('Database connection closed.')
+        print("Database connection closed.")
 
 
 def drugcentral_for_row(row):
@@ -208,7 +210,9 @@ def drugcentral_for_row(row):
                 if notnull(value) and len(str(value)) > 0:
                     with conn.cursor() as cur:
                         try:
-                            query = DRUGCENTRAL_SQL.format(sql_condition.format(str(value)))
+                            query = DRUGCENTRAL_SQL.format(
+                                sql_condition.format(str(value))
+                            )
                             # logging.info(query)
                             cur.execute(query)
                             structure = cur.fetchone()
@@ -276,14 +280,23 @@ def drugcentral_postgresql(inchikey=None, split_inchikey=None):
 
         with conn.cursor() as cur:
             if inchikey:
-                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey)))
+                cur.execute(
+                    DRUGCENTRAL_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey))
+                )
                 structure = cur.fetchone()
             if not structure and split_inchikey:
-                cur.execute(DRUGCENTRAL_SQL.format(EXTERNAL_IDS["split_inchikey"].format(split_inchikey)))
+                cur.execute(
+                    DRUGCENTRAL_SQL.format(
+                        EXTERNAL_IDS["split_inchikey"].format(split_inchikey)
+                    )
+                )
                 structure = cur.fetchone()
             if not structure:
                 logging.info(
-                    "NO Drugcentral match FOR: Inchikey:{} and split_inchikey:{}".format(inchikey, split_inchikey))
+                    "NO Drugcentral match FOR: Inchikey:{} and split_inchikey:{}".format(
+                        inchikey, split_inchikey
+                    )
+                )
                 return None, None
             else:
                 return cur.description, structure
