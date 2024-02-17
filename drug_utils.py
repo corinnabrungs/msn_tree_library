@@ -1,8 +1,8 @@
-from pandas_utils import isnull
+from pandas_utils import isnull, isnull_or_empty
 
 
 def map_clinical_phase_to_number(phase):
-    if isnull(phase):
+    if isnull_or_empty(phase):
         return 0
 
     cleanphase = str(phase).split("/")[-1].strip()
@@ -24,7 +24,7 @@ def map_clinical_phase_to_number(phase):
 
 
 def get_clinical_phase_description(number):
-    if isnull(number):
+    if isnull_or_empty(number):
         return number
 
     match (str(number)):

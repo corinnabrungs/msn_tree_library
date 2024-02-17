@@ -15,7 +15,9 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
 def chembl_availability(df) -> pd.DataFrame:
     compounds = [
         get_chembl_mol(chembl_id, inchi_key)
-        for chembl_id, inchi_key in tqdm(zip(df["chembl_id"], df["inchikey"]))
+        for chembl_id, inchi_key in tqdm(
+            zip(df["chembl_id"], df["inchikey"]), total=len(df)
+        )
     ]
     df["availability"] = [
         compound["availability_type"] if notnull(compound) else np.NAN

@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 
 from meta_constants import MetaColumns
-from pandas_utils import notnull
+from pandas_utils import notnull, notnull_not_empty
 
 import pandas as pd
 import psycopg2
@@ -209,7 +209,7 @@ def drugcentral_for_row(row):
                 value = row.get(column_name)
                 if column_name == "split_inchikey":
                     value = f"^{value}"  # regular expression match: startswith
-                if notnull(value) and len(str(value)) > 0:
+                if notnull_not_empty(value):
                     with conn.cursor() as cur:
                         try:
                             query = DRUGCENTRAL_SQL.format(sql_condition)
@@ -243,7 +243,7 @@ def drugcentral_additional_query(dc_id, sql_query):
         return None, None
     try:
         try:
-            if notnull(dc_id) and len(str(dc_id)) > 0:
+            if notnull_not_empty(dc_id):
                 with conn.cursor() as cur:
                     try:
                         # query = sql_query.format(str(dc_id))

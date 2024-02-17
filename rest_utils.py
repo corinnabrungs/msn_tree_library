@@ -2,9 +2,20 @@ import requests
 import json
 
 
-def get_json_response(url, post=False):
+def get_json_response(url, post=False, timeout=10):
+    """
+
+    :param url:
+    :param post:
+    :param timeout: default is 10 seconds
+    :return:
+    """
     try:
-        response = requests.post(url) if post else requests.get(url)
+        response = (
+            requests.post(url, timeout=timeout)
+            if post
+            else requests.get(url, timeout=timeout)
+        )
         response.raise_for_status()
         return json.loads(response.text)
     except requests.exceptions.HTTPError as errh:
@@ -37,22 +48,33 @@ def get_json_response_with_headers(url, headers, body, post=False):
     return None
 
 
-def json_col(result_df, json_column, prefix, field, apply_function=None, new_col_name=None):
+def json_col(
+    result_df, json_column, prefix, field, apply_function=None, new_col_name=None
+):
     if new_col_name is None:
         new_col_name = field
     full_column_name = f"{prefix}_{new_col_name}"
     if apply_function is None:
-        result_df[full_column_name] = [jo[field] if jo and field in jo else None for jo in json_column]
+        result_df[full_column_name] = [
+            jo[field] if jo and field in jo else None for jo in json_column
+        ]
     else:
-        result_df[full_column_name] = [None if jo is None or field not in jo else apply_function(jo[field]) for jo
-                                       in json_column]
+        result_df[full_column_name] = [
+            None if jo is None or field not in jo else apply_function(jo[field])
+            for jo in json_column
+        ]
     return result_df
 
 
 def extract_external_descriptors(json_array):
     # [{'source': 'CHEBI', 'source_id': 'CHEBI:48565', 'annotations': ['organic heteropentacyclic compound',
     # 'methyl ester', 'yohimban alkaloid']}]
-    return join(["{} ({}):{}".format(json["source"], json["source_id"], json["annotations"]) for json in json_array])
+    return join(
+        [
+            "{} ({}):{}".format(json["source"], json["source_id"], json["annotations"])
+            for json in json_array
+        ]
+    )
 
 
 def extract_name(json):
@@ -64,7 +86,8 @@ def join(json_array, sep=";"):
 
 
 def join_by_field(json, field, sep=";"):
-    if json is None: return None
+    if json is None:
+        return None
     return sep.join(json[field])
 
 

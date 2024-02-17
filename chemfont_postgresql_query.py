@@ -39,7 +39,7 @@ INFO = """
 """
 
 
-def config(filename='chemfont_database.ini', section='postgresql'):
+def config(filename="chemfont_database.ini", section="postgresql"):
     # create a parser
     parser = ConfigParser()
     # read config file
@@ -52,7 +52,9 @@ def config(filename='chemfont_database.ini', section='postgresql'):
         for param in params:
             db[param[0]] = param[1]
     else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+        raise Exception(
+            "Section {0} not found in the {1} file".format(section, filename)
+        )
 
     return db
 
@@ -64,13 +66,13 @@ def connect():
         params = config()
 
         # connect to the PostgreSQL server
-        print('Connecting to the PostgreSQL database...')
+        print("Connecting to the PostgreSQL database...")
         conn = psycopg2.connect(**params)
 
         # execute a statement
-        print('PostgreSQL database version:')
+        print("PostgreSQL database version:")
         with conn.cursor() as cur:
-            cur.execute('SELECT version()')
+            cur.execute("SELECT version()")
             # display the PostgreSQL database server version
             db_version = cur.fetchone()
             print(db_version)
@@ -86,7 +88,7 @@ def deconnect():
     is_connected = False
     if conn is not None:
         conn.close()
-        print('Database connection closed.')
+        print("Database connection closed.")
 
 
 def chemfont_for_row(row):
@@ -104,10 +106,12 @@ def chemfont_for_row(row):
         for column_name, sql_condition in EXTERNAL_IDS.items():
             try:
                 value = row.get(column_name)
-                if notnull(value) and len(str(value)) > 0:
+                if notnull_not_empty(value):
                     with conn.cursor() as cur:
                         try:
-                            query = CHEMFONT_SQL.format(sql_condition.format(str(value)))
+                            query = CHEMFONT_SQL.format(
+                                sql_condition.format(str(value))
+                            )
                             # logging.info(query)
                             cur.execute(query)
                             structure = cur.fetchone()
@@ -143,14 +147,23 @@ def chemfont_postgresql(inchikey=None, split_inchikey=None):
 
         with conn.cursor() as cur:
             if inchikey:
-                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey)))
+                cur.execute(
+                    CHEMFONT_SQL.format(EXTERNAL_IDS["inchikey"].format(inchikey))
+                )
                 structure = cur.fetchone()
             if not structure and split_inchikey:
-                cur.execute(CHEMFONT_SQL.format(EXTERNAL_IDS["split_inchikey"].format(split_inchikey)))
+                cur.execute(
+                    CHEMFONT_SQL.format(
+                        EXTERNAL_IDS["split_inchikey"].format(split_inchikey)
+                    )
+                )
                 structure = cur.fetchone()
             if not structure:
                 logging.info(
-                    "NO Chemfont match FOR: Inchikey:{} and split_inchikey:{}".format(inchikey, split_inchikey))
+                    "NO Chemfont match FOR: Inchikey:{} and split_inchikey:{}".format(
+                        inchikey, split_inchikey
+                    )
+                )
                 return None, None
             else:
                 return cur.description, structure

@@ -15,6 +15,7 @@ from pandas_utils import (
     update_dataframes,
     add_column_prefix,
     left_merge_retain_index,
+    notnull_not_empty,
 )
 from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
@@ -31,12 +32,12 @@ def map_drugbank_approval(status):
 
 
 def find_in_drugbank(drugbank_df, row):
-    if notnull(row["drugbank_id"]):
+    if notnull_not_empty(row["drugbank_id"]):
         return row["drugbank_id"]
 
     dbid = None
     # pubchem id first, then CHEMBL, then synonyms
-    if notnull(row["drugbank_id"]):
+    if notnull_not_empty(row["drugbank_id"]):
         dbid = next(
             (
                 d
@@ -46,7 +47,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if notnull(row["inchikey"]):
+    if isnull(dbid) and notnull_not_empty(row["inchikey"]):
         dbid = next(
             (
                 d
@@ -56,7 +57,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if isnull(dbid) and not isnull(row[MetaColumns.pubchem_cid]):
+    if isnull(dbid) and notnull_not_empty(row[MetaColumns.pubchem_cid]):
         dbid = next(
             (
                 d
@@ -66,7 +67,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if isnull(dbid) and not isnull(row[MetaColumns.input_pubchem_cid]):
+    if isnull(dbid) and notnull_not_empty(row[MetaColumns.input_pubchem_cid]):
         dbid = next(
             (
                 d
@@ -76,7 +77,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if isnull(dbid) and notnull(row["chembl_id"]):
+    if isnull(dbid) and notnull_not_empty(row["chembl_id"]):
         dbid = next(
             (
                 d
@@ -86,7 +87,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if isnull(dbid) and notnull(row["unii"]):
+    if isnull(dbid) and notnull_not_empty(row["unii"]):
         dbid = next(
             (d for d in drugbank_df[drugbank_df["unii"] == row["unii"]]["drugbank_id"]),
             None,
@@ -96,7 +97,7 @@ def find_in_drugbank(drugbank_df, row):
             (d for d in drugbank_df[drugbank_df["cas"] == row["cas"]]["drugbank_id"]),
             None,
         )
-    if isnull(dbid) and notnull(row["split_inchikey"]):
+    if isnull(dbid) and notnull_not_empty(row["split_inchikey"]):
         dbid = next(
             (
                 d
@@ -106,7 +107,7 @@ def find_in_drugbank(drugbank_df, row):
             ),
             None,
         )
-    if isnull(dbid) and row["synonyms"]:
+    if isnull(dbid) and notnull_not_empty(row["synonyms"]):
         lower_synonyms = [s.lower().strip() for s in row["synonyms"] if notnull(s)]
         filtered_dbank_df = drugbank_df[
             drugbank_df["lower_case_compound_name"].isin(lower_synonyms)

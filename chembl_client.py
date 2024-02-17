@@ -13,6 +13,8 @@ from pandas_utils import (
     update_dataframes,
     make_str_floor_to_int_number,
     get_unique_list,
+    notnull_not_empty,
+    isnull_or_empty,
 )
 from drug_utils import map_clinical_phase_to_number
 from tqdm import tqdm
@@ -21,16 +23,16 @@ import datetime as dt
 
 def get_chembl_mol(chembl_id=None, inchikey=None):
     try:
-        if isnull(chembl_id) and isnull(inchikey):
+        if isnull_or_empty(chembl_id) and isnull_or_empty(inchikey):
             return None
 
-        if notnull(chembl_id):
+        if notnull_not_empty(chembl_id):
             comp = chembl.molecule.get(chembl_id)
             if comp:
                 return comp
 
         compounds = None
-        if not compounds and notnull(inchikey):
+        if not compounds and notnull_not_empty(inchikey):
             compounds = chembl.molecule.filter(
                 molecule_structures__standard_inchi_key=inchikey
             )
@@ -64,7 +66,7 @@ def chembl_search_id_and_inchikey(
     filtered["result_column"] = [
         get_chembl_mol(chembl_id, inchikey)
         for chembl_id, inchikey in tqdm(
-            zip(filtered["chembl_id"], filtered["inchikey"])
+            zip(filtered["chembl_id"], filtered["inchikey"]), total=len(filtered)
         )
     ]
     filtered = filtered[filtered["result_column"].notnull()].copy()

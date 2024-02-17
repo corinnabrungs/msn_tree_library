@@ -3,6 +3,7 @@ import re
 import ast
 
 import pandas as pd
+from pyarrow.util import _is_iterable
 
 import pandas_utils as pu
 from meta_constants import MetaColumns
@@ -12,6 +13,7 @@ from pandas_utils import (
     notnull,
     isnull,
     get_first_or_else,
+    is_iterable,
 )
 
 
@@ -24,15 +26,18 @@ def parse_synonyms_to_list(synonyms) -> list:
     if pu.isnull(synonyms):
         return []
 
-    if not isinstance(synonyms, str):
+    elif isinstance(synonyms, str):
+        synonyms = synonyms.strip()
+        # parse string from list or from semicolon separated
+        if synonyms.startswith("[") and synonyms.endswith("]"):
+            return ast.literal_eval(synonyms)
+
+        return [name.strip() for name in synonyms.split(";") if len(name.strip()) > 0]
+
+    elif isinstance(synonyms, list):
         return synonyms
-
-    synonyms = synonyms.strip()
-    # parse string from list or from semicolon separated
-    if synonyms.startswith("[") and synonyms.endswith("]"):
-        return ast.literal_eval(synonyms)
-
-    return [name.strip() for name in synonyms.split(";") if len(name.strip()) > 0]
+    elif is_iterable(synonyms):
+        return [syn for syn in synonyms]
 
 
 def get_all_synonyms(row):

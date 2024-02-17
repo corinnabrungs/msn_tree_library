@@ -29,6 +29,22 @@ def notnull(o):
     return not isnull(o)
 
 
+def notnull_not_empty(o):
+    return not isnull_or_empty(o)
+
+
+def isnull_or_empty(o):
+    # get len if available otherwise not empty
+    return isnull(o) or len_or_else(o, 1) == 0
+
+
+def len_or_else(obj, default_value):
+    try:
+        return len(obj)
+    except TypeError:
+        return default_value
+
+
 def read_dataframe(file):
     if file.endswith(".tsv"):
         df = pd.read_csv(file, sep="\t")
@@ -335,6 +351,14 @@ def make_str_floor_to_int_number(df: pd.DataFrame, columns) -> pd.DataFrame:
     for col in columns:
         df[col] = df[col].astype("str").str.split(".").str[0]
     return df
+
+
+def is_iterable(obj):
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
 
 
 def divide_n_chunks(items, n):

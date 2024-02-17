@@ -3,7 +3,13 @@ import pandas_utils
 import rdkit_mol_identifiers
 from meta_constants import MetaColumns
 from metadata_cleanup_prefect import clean_structure_add_mol_id_columns_prefect
-from pandas_utils import notnull, isnull, divide_chunks, groupby_join_unique_values
+from pandas_utils import (
+    notnull,
+    isnull,
+    divide_chunks,
+    groupby_join_unique_values,
+    isnull_or_empty,
+)
 import pandas as pd
 import numpy as np
 from SPARQLWrapper import SPARQLWrapper, JSON
@@ -21,7 +27,7 @@ def ensure_identifier(item, identifier: str = "wd"):
     :param identifier:
     :return: identifier:item e.g. wd:Q193572
     """
-    if isnull(item) or len(str(item)) == 0:
+    if isnull_or_empty(item):
         return None
     item = str(item)
 
@@ -38,7 +44,11 @@ def ensure_identifier(item, identifier: str = "wd"):
 
 
 def _create_input_list(taxon_list, identifier: str = "wd") -> str:
-    items = [ensure_identifier(item, identifier) for item in taxon_list if notnull(item) and len(str(item)) > 0]
+    items = [
+        ensure_identifier(item, identifier)
+        for item in taxon_list
+        if notnull(item) and len(str(item)) > 0
+    ]
     return " ".join(items)
 
 
@@ -67,7 +77,9 @@ def _get_reference_info_sparql(references):
       OPTIONAL { ?reference wdt:P356 ?doi. }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    """.replace("PLACEHOLDER", input_list)
+    """.replace(
+        "PLACEHOLDER", input_list
+    )
 
 
 def _get_structure_info_sparql(structures):
@@ -87,7 +99,9 @@ def _get_structure_info_sparql(structures):
       OPTIONAL { ?structure wdt:P234 ?inchi .}
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    """.replace("PLACEHOLDER", input_list)
+    """.replace(
+        "PLACEHOLDER", input_list
+    )
 
 
 def _get_parent_taxon_ncbi_sparql(taxon_list):
@@ -109,11 +123,18 @@ def _get_parent_taxon_ncbi_sparql(taxon_list):
       OPTIONAL { ?parent_taxon wdt:P685 ?parent_ncbi_id. }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    """.replace("PLACEHOLDER", input_list)
+    """.replace(
+        "PLACEHOLDER", input_list
+    )
 
 
-def get_sparql_json_results(sparql_query: str, endpoint_url: str = "https://query.wikidata.org/sparql"):
-    user_agent = "WDQS-example Python/%s.%s" % (sys.version_info[0], sys.version_info[1])
+def get_sparql_json_results(
+    sparql_query: str, endpoint_url: str = "https://query.wikidata.org/sparql"
+):
+    user_agent = "WDQS-example Python/%s.%s" % (
+        sys.version_info[0],
+        sys.version_info[1],
+    )
     # TODO adjust user agent; see https://w.wiki/CX6
     sparql = SPARQLWrapper(endpoint_url, agent=user_agent)
     sparql.setQuery(sparql_query)
@@ -122,17 +143,17 @@ def get_sparql_json_results(sparql_query: str, endpoint_url: str = "https://quer
 
 
 def extract_values(result):
-    return {key: result[key]['value'] for key in result}
+    return {key: result[key]["value"] for key in result}
 
 
-def load_as_dataframe(sparql_query: str, endpoint_url: str = "https://query.wikidata.org/sparql") -> pd.DataFrame:
-    results = get_sparql_json_results(sparql_query, endpoint_url)['results']['bindings']
+def load_as_dataframe(
+    sparql_query: str, endpoint_url: str = "https://query.wikidata.org/sparql"
+) -> pd.DataFrame:
+    results = get_sparql_json_results(sparql_query, endpoint_url)["results"]["bindings"]
     new_results = [extract_values(result) for result in results]
     df = pd.DataFrame(new_results)
     label_cols = [col for col in df.columns if col.endswith("Label")]
-    df = df.rename(columns={
-        old: old[:-5] + "_label" for old in label_cols
-    })
+    df = df.rename(columns={old: old[:-5] + "_label" for old in label_cols})
     return df
 
 
@@ -180,18 +201,28 @@ def query_dataframe_lotus_compound_taxon_relations():
     query = _get_lotus_compound_taxon_relations_sparql()
     df = load_as_dataframe(query, wikidata_sparql_url)
     # add more information to the taxon, structure, and reference
-    df = df.merge(query_dataframe_parent_taxon_ncbi(df["taxon"]), on="taxon", how="left") \
-        .sort_values(["parent_ncbi_id"]) \
+    df = (
+        df.merge(query_dataframe_parent_taxon_ncbi(df["taxon"]), on="taxon", how="left")
+        .sort_values(["parent_ncbi_id"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
-    df = df.merge(query_dataframe_reference_info(df["reference"]), on="reference", how="left") \
-        .sort_values(["doi"]) \
+    df = (
+        df.merge(
+            query_dataframe_reference_info(df["reference"]), on="reference", how="left"
+        )
+        .sort_values(["doi"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
-    structures_df = query_dataframe_structure_info(df["structure"]).drop(columns=["inchikey"])
-    df = df.merge(structures_df, on="structure", how="left") \
-        .sort_values(["inchikey"]) \
+    structures_df = query_dataframe_structure_info(df["structure"]).drop(
+        columns=["inchikey"]
+    )
+    df = (
+        df.merge(structures_df, on="structure", how="left")
+        .sort_values(["inchikey"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
     return df
 
@@ -218,22 +249,33 @@ def download_lotus_prefect():
     references = query_dataframe_reference_info.submit(df["reference"])
     structures_df = query_dataframe_structure_info.submit(df["structure"])
 
-    df = df.merge(parents.result(), on="taxon", how="left") \
-        .sort_values(["parent_ncbi_id"]) \
+    df = (
+        df.merge(parents.result(), on="taxon", how="left")
+        .sort_values(["parent_ncbi_id"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
-    df = df.merge(references.result(), on="reference", how="left") \
-        .sort_values(["doi"]) \
+    df = (
+        df.merge(references.result(), on="reference", how="left")
+        .sort_values(["doi"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
     # inchikey is already present from df
     structures_df = structures_df.result().drop(columns=["inchikey", "split_inchikey"])
-    df = df.merge(structures_df, on="structure", how="left") \
-        .sort_values(["inchikey"]) \
+    df = (
+        df.merge(structures_df, on="structure", how="left")
+        .sort_values(["inchikey"])
         .drop_duplicates(["taxon", "structure", "reference"])
+    )
 
     # clean strucutres and drop not needed columns
-    excluded_cols = [MetaColumns.smiles, MetaColumns.canonical_smiles, MetaColumns.isomeric_smiles, MetaColumns.inchi]
+    excluded_cols = [
+        MetaColumns.smiles,
+        MetaColumns.canonical_smiles,
+        MetaColumns.isomeric_smiles,
+        MetaColumns.inchi,
+    ]
     columns = [col for col in df.columns if col not in excluded_cols]
     df = clean_structure_add_mol_id_columns_prefect(structures_df)[columns]
 
@@ -242,5 +284,5 @@ def download_lotus_prefect():
     return df
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     download_lotus_prefect()

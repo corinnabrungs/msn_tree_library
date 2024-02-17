@@ -5,7 +5,18 @@ import pandas as pd
 import datetime as dt
 from date_utils import create_expired_entries_dataframe, iso_datetime_now
 from meta_constants import MetaColumns
-from pandas_utils import get_unique_dict, isnull, update_dataframes
+from pandas_utils import (
+    get_unique_dict,
+    isnull,
+    update_dataframes,
+    notnull,
+    notnull_not_empty,
+    isnull_or_empty,
+)
+from tqdm import tqdm
+from joblib import Memory
+
+memory = Memory("memcache")
 
 # NP_CLASSIFIER_URL = "https://npclassifier.ucsd.edu/classify?smiles={}"
 # CLASSYFIRE_URL = "https://gnps-structure.ucsd.edu/classyfire?smiles={}"
@@ -28,19 +39,19 @@ NP_CLASSIFIER_PREFIX = "npclassifier"
 
 
 def classyfire_smiles_url(smiles):
-    if isnull(smiles):
+    if isnull_or_empty(smiles):
         return None
     return CLASSYFIRE_SMILES_URL.format(urllib.parse.quote(smiles))
 
 
 def classyfire_inchikey_url(inchikey):
-    if isnull(inchikey):
+    if isnull_or_empty(inchikey):
         return None
     return CLASSYFIRE_INCHIKEY_URL.format(urllib.parse.quote(inchikey))
 
 
 def np_classifier_url(smiles):
-    if isnull(smiles):
+    if isnull_or_empty(smiles):
         return None
     return NP_CLASSIFIER_URL.format(urllib.parse.quote(smiles))
 
@@ -61,8 +72,8 @@ def apply_np_classifier(
     )
 
     unique_smiles_dict = get_unique_dict(filtered, MetaColumns.smiles)
-    for smiles in unique_smiles_dict:
-        unique_smiles_dict[smiles] = get_json_response(np_classifier_url(smiles))
+    for smiles in tqdm(unique_smiles_dict):
+        unique_smiles_dict[smiles] = query_np_classifier(smiles)
 
     # temp column with json results
 
@@ -103,22 +114,48 @@ def apply_np_classifier(
     # return update_dataframes(filtered, df)
 
 
-def query_classyfire(
-    smiles, inchikey, smiles_dict: dict, inchikey_dict: dict
-) -> str | None:
-    classy_json = smiles_dict.get(smiles)
-    if classy_json is not None:
-        return classy_json
-    classy_json = inchikey_dict.get(inchikey)
-    if classy_json is not None:
-        return classy_json
+def query_np_classifier(smiles) -> str | None:
+    try:
+        return _query_np_classifier(smiles)
+    except:
+        logging.info(f"Failed np classifier for {smiles}")
+        return None
 
-    classy_json = get_json_response(classyfire_inchikey_url(inchikey))
+
+@memory.cache
+def _query_np_classifier(smiles) -> str | None:
+    if isnull_or_empty(smiles):
+        return None
+
+    response = get_json_response(np_classifier_url(smiles))
+    if response is None:
+        raise Exception()
+    return response
+
+
+def query_classyfire(smiles, inchikey) -> str | None:
+    try:
+        return _query_classyfire(smiles, inchikey)
+    except:
+        logging.info(f"Failed classyfire for {smiles} and {inchikey}")
+        return None
+
+
+@memory.cache
+def _query_classyfire(smiles, inchikey) -> str | None:
+    if isnull_or_empty(smiles) and isnull_or_empty(inchikey):
+        return None
+
+    # TODO reduce timeout again to 2 and 3 sec
+    classy_json = None
+    if notnull_not_empty(inchikey):
+        classy_json = get_json_response(classyfire_inchikey_url(inchikey), timeout=5)
+
+    if classy_json is None and notnull_not_empty(smiles):
+        classy_json = get_json_response(classyfire_smiles_url(smiles), timeout=5)
+
     if classy_json is None:
-        classy_json = get_json_response(classyfire_smiles_url(smiles))
-
-    smiles_dict[smiles] = classy_json
-    inchikey_dict[inchikey] = classy_json
+        raise Exception()
     return classy_json
 
 
@@ -137,13 +174,12 @@ def apply_classyfire(
         df, MetaColumns.date_classyfire, refresh_expired_entries_after
     )
 
-    inchikey_dict = {}
-    smiles_dict = {}
-
     # temp column with json results
     filtered["result_column"] = [
-        query_classyfire(smiles, inchikey, smiles_dict, inchikey_dict)
-        for smiles, inchikey in zip(filtered["smiles"], filtered["inchikey"])
+        query_classyfire(smiles, inchikey)
+        for smiles, inchikey in tqdm(
+            zip(filtered["smiles"], filtered["inchikey"]), total=len(filtered)
+        )
     ]
     result_column = filtered["result_column"]
 

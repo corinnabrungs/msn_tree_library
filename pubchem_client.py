@@ -20,6 +20,8 @@ from pandas_utils import (
     get_or_else,
     make_str_floor_to_int_number,
     get_first_or_else,
+    notnull_not_empty,
+    isnull_or_empty,
 )
 from tqdm import tqdm
 from rdkit_mol_identifiers import ensure_smiles_column
@@ -33,7 +35,9 @@ memory = Memory("memcache")
 
 def prepend_pubchem_synonyms(df: pd.DataFrame) -> pd.DataFrame:
     try:
-        pc_synonyms = [pubchem_get_synonyms(compound) for compound in df["pubchem"]]
+        pc_synonyms = df["pubchem"].progress_apply(
+            lambda compound: pubchem_get_synonyms(compound)
+        )
         df = synonyms.ensure_synonyms_column(df)
         df = synonyms.add_synonyms_columns(df, new_synonyms=pc_synonyms, prepend=True)
     except:
@@ -186,7 +190,7 @@ def pubchem_search_parent(
     if MetaColumns.pubchem_cid not in filtered:
         filtered[MetaColumns.pubchem_cid] = None
     filtered[MetaColumns.input_pubchem_cid] = [
-        input_cid if notnull(input_cid) else cid
+        input_cid if notnull_not_empty(input_cid) else cid
         for input_cid, cid in zip(
             filtered[MetaColumns.input_pubchem_cid], filtered[MetaColumns.pubchem_cid]
         )
@@ -272,12 +276,13 @@ def pubchem_search_by_structure(
         return df
 
     filtered = filtered[filtered["pubchem"].isnull()].copy()
-    filtered["pubchem"] = [
-        search_pubchem_by_structure(smiles, inchi, inchikey)
-        for inchikey, smiles, inchi in zip(
-            filtered["inchikey"], filtered[MetaColumns.smiles], filtered["inchi"]
-        )
-    ]
+
+    filtered["pubchem"] = filtered.progress_apply(
+        lambda row: search_pubchem_by_structure(
+            row[MetaColumns.smiles], row[MetaColumns.inchi], row[MetaColumns.inchikey]
+        ),
+        axis=1,
+    )
 
     filtered = filtered[filtered["pubchem"].notnull()].copy()
     # refresh date
@@ -311,7 +316,7 @@ def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
     :param name_or_cas: input name or cas
     :return: first compound or None
     """
-    if name_or_cas == "NaN":
+    if isnull_or_empty(name_or_cas):
         return None
     try:
         compounds = get_compounds(name_or_cas, "name")
@@ -326,20 +331,29 @@ def search_pubchem_by_name(name_or_cas: str) -> Compound | None:
         pass
 
 
-@memory.cache
 def pubchem_by_cid(cid) -> Compound | None:
+    try:
+        return _pubchem_by_cid_cached(cid)
+    except:
+        logging.exception("Cannot retrieve PUBCHEM CID {}".format(cid))
+        return None
+
+
+@memory.cache
+def _pubchem_by_cid_cached(cid) -> Compound | None:
     return _pubchem_by_cid(cid)
 
 
 def _pubchem_by_cid(cid, ntry=1, max_tries=10) -> Compound | None:
+    if isnull_or_empty(cid):
+        return None
     try:
         return pubchempy.Compound.from_cid(cid)
-    except:
+    except Exception as error:
         if ntry < max_tries:
             return _pubchem_by_cid(cid, ntry=ntry + 1, max_tries=max_tries)
         else:
-            logging.exception("Cannot retrieve PUBCHEM CID {}".format(cid))
-            return None
+            raise error
 
 
 def search_pubchem_by_structure(
@@ -353,16 +367,16 @@ def search_pubchem_by_structure(
     :param inchikey:
     :return: first compound or None
     """
-    if not (smiles or inchi or inchikey):
+    if isnull_or_empty(smiles) and isnull_or_empty(inchi) and isnull_or_empty(inchikey):
         return None
 
     compounds = None
     try:
-        if inchikey:
+        if notnull_not_empty(inchikey):
             compounds = get_pubchem_compound(inchikey, MetaColumns.inchikey)
-        if not compounds and smiles:
+        if not compounds and notnull_not_empty(smiles):
             compounds = get_pubchem_compound(smiles, MetaColumns.smiles)
-        if not compounds and inchi:
+        if not compounds and notnull_not_empty(inchi):
             compounds = get_pubchem_compound(inchi, MetaColumns.inchi)
         if not compounds:
             logging.info(
@@ -383,12 +397,25 @@ def search_pubchem_by_structure(
         return None
 
 
-@memory.cache
 def get_pubchem_compound(value, key):
-    return _get_pubchem_compound(value, key)
+    try:
+        return _get_pubchem_compound_cached(value, key)
+    except:
+        logging.info(f"Failed pubchem by {value} as {key}")
+        return None
+
+
+@memory.cache
+def _get_pubchem_compound_cached(value, key):
+    result = _get_pubchem_compound(value, key)
+    if result is None:
+        raise Exception("failed pubchem client by key value")
+    return result
 
 
 def _get_pubchem_compound(value, key, ntry=1, max_tries=10):
+    if isnull_or_empty(value):
+        return None
     try:
         return get_compounds(value, key)
     except:
@@ -399,9 +426,20 @@ def _get_pubchem_compound(value, key, ntry=1, max_tries=10):
             return None
 
 
-@memory.cache
 def pubchem_get_synonyms(compound):
-    return _pubchem_get_synonyms(compound)
+    try:
+        return _pubchem_get_synonyms_cached(compound)
+    except:
+        logging.exception(
+            f"FAILED to retrieve PUBCHEM synonyms for compound {compound.cid}"
+        )
+        return None
+
+
+@memory.cache
+def _pubchem_get_synonyms_cached(compound):
+    synonyms = _pubchem_get_synonyms(compound)
+    return synonyms
 
 
 def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
@@ -420,16 +458,11 @@ def _pubchem_get_synonyms(compound, try_n=1, max_tries=10):
             return synonyms
         else:
             return []
-    except:
+    except Exception as error:
         if try_n < max_tries:
             return _pubchem_get_synonyms(compound, try_n=try_n + 1, max_tries=max_tries)
         else:
-            logging.exception(
-                "FAILED to retrieve PUBCHEM synonyms for compound {}".format(
-                    compound.cid
-                )
-            )
-            return []
+            raise error
 
 
 @memory.cache
@@ -456,7 +489,7 @@ def _get_pubchem_parent_cid(
     A parallel query can be executed using the REST PUG API:
     http://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11477084/cids/XML?cids_type=parent
     """
-    if isnull(cid):
+    if isnull_or_empty(cid):
         return None
 
     try:
