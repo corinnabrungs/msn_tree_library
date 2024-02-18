@@ -85,7 +85,9 @@ def _search_unichem_xref(structure: str, search_type="inchikey") -> None | dict:
 
     body = {"type": search_type, "compound": structure}
     headers = {"Content-Type": "application/json"}
-    result = get_json_response_with_headers(UNI_CHEM_URL, headers, body, True)
+    result = get_json_response_with_headers(
+        UNI_CHEM_URL, headers, body, True, timeout=5
+    )
 
     if result is None:
         raise Exception("unichem service failed")

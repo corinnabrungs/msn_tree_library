@@ -127,7 +127,7 @@ def _query_np_classifier(smiles) -> str | None:
     if isnull_or_empty(smiles):
         return None
 
-    response = get_json_response(np_classifier_url(smiles))
+    response = get_json_response(np_classifier_url(smiles), timeout=3)
     if response is None:
         raise Exception()
     return response
@@ -146,13 +146,12 @@ def _query_classyfire(smiles, inchikey) -> str | None:
     if isnull_or_empty(smiles) and isnull_or_empty(inchikey):
         return None
 
-    # TODO reduce timeout again to 2 and 3 sec
     classy_json = None
     if notnull_not_empty(inchikey):
-        classy_json = get_json_response(classyfire_inchikey_url(inchikey), timeout=5)
+        classy_json = get_json_response(classyfire_inchikey_url(inchikey), timeout=2)
 
     if classy_json is None and notnull_not_empty(smiles):
-        classy_json = get_json_response(classyfire_smiles_url(smiles), timeout=5)
+        classy_json = get_json_response(classyfire_smiles_url(smiles), timeout=3)
 
     if classy_json is None:
         raise Exception()

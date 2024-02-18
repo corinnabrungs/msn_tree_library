@@ -30,10 +30,12 @@ def get_json_response(url, post=False, timeout=10):
     return None
 
 
-def get_json_response_with_headers(url, headers, body, post=False):
+def get_json_response_with_headers(url, headers, body, post=False, timeout=10):
     try:
         req_type = "POST" if post else "GET"
-        response = requests.request(req_type, url, json=body, headers=headers)
+        response = requests.request(
+            req_type, url, json=body, headers=headers, timeout=timeout
+        )
         response.raise_for_status()
         return json.loads(response.text)
     except requests.exceptions.HTTPError as errh:

@@ -92,7 +92,7 @@ def _query_npatlas(
 
     url = npatlas_url(structure, search_type, similarity)
 
-    result = get_json_response(url, True)
+    result = get_json_response(url, True, timeout=3)
     if result is None:
         raise Exception("Failed npatlas service")
     return result
