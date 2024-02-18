@@ -361,39 +361,61 @@ def is_iterable(obj):
         return False
 
 
-def divide_n_chunks(items, n):
+def divide_n_chunks(items, n_chunks, max_chunk_size: int = -1):
     """
     divide series or dataframe into n chunks
     :param n: number of chunks
+    :param max_chunk_size: the maximum size of chunks will increase n_chunks if needed. set to -1 to deactivate
     :return: list of items split into n chunks
     """
     import math
 
-    return divide_chunks(items, math.ceil(len(items) / n))
+    total_items = len(items)
+    if max_chunk_size > 0:
+        n = math.ceil(total_items / max_chunk_size)
+        n_chunks = max(n, n_chunks)
+
+    return divide_chunks(items, math.ceil(total_items / n_chunks))
 
 
 def divide_chunks(items, chunk_size):
     """
     :return: list of chunks of specified size
     """
-    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
+    return [items[i : i + chunk_size] for i in range(0, total_items, chunk_size)]
 
 
 def save_chunks(
-    df: pd.DataFrame, base_filename, n_chunks=4, suffix="chunk"
+    df: pd.DataFrame,
+    base_filename,
+    n_chunks=4,
+    max_chunk_size: int = -1,
+    suffix="chunk",
+    file_format=".parquet",
 ) -> list[pd.DataFrame]:
-    chunks = divide_n_chunks(df, n_chunks)
+    chunks = divide_n_chunks(df, n_chunks, max_chunk_size)
     for i, subdf in enumerate(chunks):
-        save_dataframe(subdf, add_filename_suffix(base_filename, f"{suffix}{i}"))
+        save_dataframe(
+            subdf,
+            add_filename_suffix(
+                base_filename, f"{suffix}{i}", format_override=file_format
+            ),
+        )
     return chunks
 
 
-def combine_chunks(base_filename, suffix="chunk") -> pd.DataFrame:
+def combine_chunks(
+    base_filename,
+    suffix="chunk",
+    input_format=".parquet",
+) -> pd.DataFrame:
     dfs = []
     counter = 0
     while True:
         try:
-            file = add_filename_suffix(base_filename, f"{suffix}{counter}")
+            file = add_filename_suffix(
+                base_filename, f"{suffix}{counter}", input_format
+            )
             df = read_dataframe(file)
             dfs.append(df)
             logging.info("Loaded chunk:" + file)
@@ -402,3 +424,30 @@ def combine_chunks(base_filename, suffix="chunk") -> pd.DataFrame:
             break
 
     return pd.concat(dfs, ignore_index=True)
+
+
+def combine_and_save_chunks(
+    base_filename, suffix="cleaned", file_formats=[".parquet", ".tsv"]
+) -> pd.DataFrame:
+    """
+
+    :param base_filename: base file name does not contain the chunk substring and numbers
+    :return: combined dataframe
+    """
+    df = combine_chunks(base_filename)
+    for fformat in file_formats:
+        save_dataframe(df, add_filename_suffix(base_filename, suffix, fformat))
+    return df
+
+
+def check_if_chunks_available(
+    base_filename,
+    suffix="chunk",
+    input_format=".parquet",
+):
+    try:
+        file = add_filename_suffix(base_filename, f"{suffix}{0}", input_format)
+        df = read_dataframe(file)
+        return len(df) > 0
+    except:
+        return False

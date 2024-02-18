@@ -232,5 +232,5 @@ def save_unichem_df(base_file, df: pd.DataFrame):
     except:
         logging.info("No unichem file found - creating a new one at " + parquet_file)
 
-    save_dataframe(df, add_filename_suffix(base_file, "unichem", ".csv"))
+    # save_dataframe(df, add_filename_suffix(base_file, "unichem", ".csv"))
     save_dataframe(df, parquet_file)

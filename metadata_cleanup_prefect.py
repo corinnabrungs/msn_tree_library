@@ -1,9 +1,8 @@
 import logging
 
 from tqdm import tqdm
-import argparse
-
 import lotus_client
+import pandas_utils as pu
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description, map_clinical_phase_to_number
@@ -17,7 +16,12 @@ from metadata_cleanup import (
     save_intermediate_parquet,
 )
 from npatlas_client import search_np_atlas
-from pandas_utils import update_dataframes, create_missing_columns
+from pandas_utils import (
+    update_dataframes,
+    create_missing_columns,
+    read_dataframe,
+    check_if_chunks_available,
+)
 from pubchem_client import (
     pubchem_search_structure_by_name,
     pubchem_search_by_structure,
@@ -134,7 +138,72 @@ def add_lotus_flow(
 
 
 @flow(
-    name="Metadata cleanup", version="0.1.0", flow_run_name="{lib_id}:{metadata_file}"
+    name="Metadata cleanup-chunked",
+    version="0.2.0",
+    flow_run_name="{lib_id}:{metadata_file}",
+)
+def cleanup_file_chunked(
+    metadata_file,
+    lib_id,
+    n_thread=4,
+    max_chunk_size=1000,
+    full_iterations=2,
+    plate_id_header="plate_id",
+    well_header="well_location",
+    use_cached_parquet_file: bool = True,
+    query_pubchem_by_cid: bool = True,
+    query_pubchem_by_name: bool = True,
+    calc_identifiers: bool = True,
+    query_unichem: bool = True,
+    query_pubchem_by_structure: bool = True,
+    query_chembl: bool = True,
+    query_npclassifier: bool = True,
+    query_classyfire: bool = True,
+    query_npatlas: bool = True,
+    query_broad_list: bool = False,
+    query_drugbank_list: bool = False,
+    query_drugcentral: bool = False,
+    query_lotus: bool = False,
+):
+    # check if already chunks
+    has_chunks = check_if_chunks_available(metadata_file)
+    # if not has_chunks:
+    #     # read df
+    #     df = read_dataframe(metadata_file)
+    #     # >1000 split into chunks of 1000 rows in .parquet
+    #     if len(df) > max_chunk_size or n_thread > 1:
+    #         pu.save_chunks(df, file, n_thread, max_chunk_size)
+    #         has_chunks = True
+    #
+    # # repeat
+    # for iteration in full_iterations:
+    #     counter = 0
+    #     if has_chunks:
+    #         while True:  # loop chunks
+    #             try:
+    #                 file = add_filename_suffix(
+    #                     base_filename, f"{suffix}{counter}", input_format
+    #                 )
+    #                 df = read_dataframe(file)
+    #                 dfs.append(df)
+    #                 logging.info("Loaded chunk:" + file)
+    #                 counter += 1
+    #             except:
+    #                 break
+    # # run n chunks in parallel
+    # # _cleanup_file.submit()
+
+
+@flow
+def test_flow(hello):
+    import time
+
+    time.sleep(5)
+    logging.info(f"hello {hello}")
+
+
+@flow(
+    name="Metadata cleanup", version="0.2.0", flow_run_name="{lib_id}:{metadata_file}"
 )
 def cleanup_file(
     metadata_file,
@@ -293,35 +362,5 @@ def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = Tru
         # exit(1)
 
 
-
-
 if __name__ == "__main__":
-    # full_cleanup_file(r"examples\test_metadata.tsv", lib_id="test")
-    full_cleanup_file(r"examples\test_metadata_small.tsv", lib_id="test")
-    exit(0)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "input_file",
-        type=str,
-        help="the input metadata file, with some of these columns inchikey, smiles, inchi, compound_name, synonyms, ",
-    )
-    parser.add_argument(
-        "-l", "--lib_id", type=str, help="library id is added to some columns"
-    )
-    args = parser.parse_args()
-
-    full_cleanup_file(args.input_file, args.lib_id)
-    exit(0)
-
-
-    # cleanup_file("data\mce_library.tsv", id_columns=['Product Name', 'lib_plate_well', "inchikey"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-    #                  query_drugcentral=True)
-    # cleanup_file("data\gnpslib\gnps_library_small.csv", id_columns=['gnps_libid', "inchikey"], query_pubchem=True,
-    #              query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
-    # cleanup_file("data\gnpslib\gnps_library.csv", id_columns=['gnps_libid', "inchikey"], query_pubchem=True,
-    #              query_broad_list=True, query_drugbank_list=True, query_drugcentral=True)
-    # cleanup_file("data\mce_library_add_compounds.tsv", id_columns=['Product Name', 'lib_plate_well', "inchikey"], query_pubchem=True, query_broad_list=True, query_drugbank_list=True,
-    #                  query_drugcentral=True)
-    # cleanup_file(r"data/nih/nih_library_test.tsv", id_columns=['Product Name', 'lib_plate_well', "smiles"], query_pubchem=True,  pubchem_search=True, query_broad_list=True, query_drugbank_list=True,
-    #                  query_drugcentral=True)
+    prefect.serve(cleanup_file.to_deployment("standard"))

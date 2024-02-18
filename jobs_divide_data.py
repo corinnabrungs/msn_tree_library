@@ -20,5 +20,5 @@ files_and_num_chunks = [
 if __name__ == "__main__":
     for file, nchunks in files_and_num_chunks:
         df = pu.read_dataframe(file)
-        pu.save_chunks(df, file, nchunks)
+        pu.save_chunks(df, file, nchunks, 1000)
     sys.exit(0)

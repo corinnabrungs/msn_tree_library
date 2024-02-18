@@ -164,6 +164,9 @@ def extract_synonym_ids(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def use_first_synonym_as_compound_name(df: pd.DataFrame) -> pd.DataFrame:
+    if MetaColumns.synonyms not in df.columns:
+        return df
+
     df[MetaColumns.compound_name] = [
         get_first_or_else(synonyms) for synonyms in df[MetaColumns.synonyms]
     ]
