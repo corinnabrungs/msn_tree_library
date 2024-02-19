@@ -1,5 +1,10 @@
+import dataclasses
 import logging
+from dataclasses import dataclass
+from pathlib import Path
 
+import prefect
+from prefect.deployments import run_deployment
 from tqdm import tqdm
 import lotus_client
 import pandas_utils as pu
@@ -21,6 +26,7 @@ from pandas_utils import (
     create_missing_columns,
     read_dataframe,
     check_if_chunks_available,
+    add_filename_suffix,
 )
 from pubchem_client import (
     pubchem_search_structure_by_name,
@@ -35,6 +41,25 @@ from prefect import flow, task
 
 tqdm.pandas()
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
+
+
+@dataclass
+class MetadataCleanupConfig:
+    plate_id_header: str = "plate_id"
+    well_header: str = "well_location"
+    query_pubchem_by_cid: bool = True
+    query_pubchem_by_name: bool = True
+    calc_identifiers: bool = True
+    query_unichem: bool = True
+    query_pubchem_by_structure: bool = True
+    query_chembl: bool = True
+    query_npclassifier: bool = True
+    query_classyfire: bool = True
+    query_npatlas: bool = False
+    query_broad_list: bool = False
+    query_drugbank_list: bool = False
+    query_drugcentral: bool = False
+    query_lotus: bool = False
 
 
 @task(name="Extract prepare data")
@@ -143,114 +168,132 @@ def add_lotus_flow(
     flow_run_name="{lib_id}:{metadata_file}",
 )
 def cleanup_file_chunked(
-    metadata_file,
-    lib_id,
-    n_thread=4,
+    cfg: MetadataCleanupConfig,
+    metadata_file: str,
+    lib_id: str,
+    use_cached_parquet_file: bool = True,
+    n_thread=5,
+    min_chunk_size=250,
     max_chunk_size=1000,
     full_iterations=2,
-    plate_id_header="plate_id",
-    well_header="well_location",
-    use_cached_parquet_file: bool = True,
-    query_pubchem_by_cid: bool = True,
-    query_pubchem_by_name: bool = True,
-    calc_identifiers: bool = True,
-    query_unichem: bool = True,
-    query_pubchem_by_structure: bool = True,
-    query_chembl: bool = True,
-    query_npclassifier: bool = True,
-    query_classyfire: bool = True,
-    query_npatlas: bool = True,
-    query_broad_list: bool = False,
-    query_drugbank_list: bool = False,
-    query_drugcentral: bool = False,
-    query_lotus: bool = False,
 ):
+    if not use_cached_parquet_file:
+        pu.delete_chunks(metadata_file)
     # check if already chunks
     has_chunks = check_if_chunks_available(metadata_file)
-    # if not has_chunks:
-    #     # read df
-    #     df = read_dataframe(metadata_file)
-    #     # >1000 split into chunks of 1000 rows in .parquet
-    #     if len(df) > max_chunk_size or n_thread > 1:
-    #         pu.save_chunks(df, file, n_thread, max_chunk_size)
-    #         has_chunks = True
-    #
-    # # repeat
-    # for iteration in full_iterations:
-    #     counter = 0
-    #     if has_chunks:
-    #         while True:  # loop chunks
-    #             try:
-    #                 file = add_filename_suffix(
-    #                     base_filename, f"{suffix}{counter}", input_format
-    #                 )
-    #                 df = read_dataframe(file)
-    #                 dfs.append(df)
-    #                 logging.info("Loaded chunk:" + file)
-    #                 counter += 1
-    #             except:
-    #                 break
-    # # run n chunks in parallel
-    # # _cleanup_file.submit()
+    if not has_chunks:
+        # read df
+        df = read_dataframe(metadata_file)
+        # >1000 split into chunks of 1000 rows in .parquet
+        if len(df) > max_chunk_size or n_thread > 1:
+            chunks = pu.save_chunks(
+                df, metadata_file, n_thread, min_chunk_size, max_chunk_size
+            )
+            has_chunks = len(chunks) > 1  # if 1 then original df
+
+    if not has_chunks:
+        # run one job
+        run_async(
+            cfg=cfg,
+            metadata_file=metadata_file,
+            lib_id=lib_id,
+            flow_method=cleanup_file,
+            use_cached_parquet_file=use_cached_parquet_file,
+            full_iterations=full_iterations,
+        )
+    else:
+        counter = 0
+        while True:  # loop chunks
+            try:
+                file = pu.add_filename_suffix(
+                    metadata_file, f"chunk{counter}", ".parquet"
+                )
+                if not Path(file).is_file():
+                    break
+                run_async(
+                    cfg=cfg,
+                    metadata_file=file,
+                    lib_id=lib_id,
+                    flow_method=cleanup_file,
+                    use_cached_parquet_file=use_cached_parquet_file,
+                    full_iterations=full_iterations,
+                )
+                counter += 1
+            except:
+                break
 
 
-@flow
-def test_flow(hello):
-    import time
+def run_async(
+    cfg: MetadataCleanupConfig,
+    metadata_file: str,
+    lib_id: str,
+    flow_method,
+    deployment_name="standard",
+    use_cached_parquet_file: bool = True,
+    current_iteration: int | None = None,
+    full_iterations: int = 2,
+):
+    params = {
+        "cfg": dataclasses.asdict(cfg),
+        "metadata_file": metadata_file,
+        "lib_id": lib_id,
+        "use_cached_parquet_file": use_cached_parquet_file,
+        "full_iterations": full_iterations,
+    }
+    if current_iteration is not None:
+        params["current_iteration"] = current_iteration
 
-    time.sleep(5)
-    logging.info(f"hello {hello}")
+    run_deployment(
+        f"{flow_method.name}/{deployment_name}",
+        parameters=params,
+        timeout=0,  # non blocking, to not wait for flow to finish
+    )
 
 
 @flow(
     name="Metadata cleanup", version="0.2.0", flow_run_name="{lib_id}:{metadata_file}"
 )
 def cleanup_file(
-    metadata_file,
-    lib_id,
-    plate_id_header="plate_id",
-    well_header="well_location",
+    cfg: MetadataCleanupConfig,
+    metadata_file: str,
+    lib_id: str,
     use_cached_parquet_file: bool = True,
-    query_pubchem_by_cid: bool = True,
-    query_pubchem_by_name: bool = True,
-    calc_identifiers: bool = True,
-    query_unichem: bool = True,
-    query_pubchem_by_structure: bool = True,
-    query_chembl: bool = True,
-    query_npclassifier: bool = True,
-    query_classyfire: bool = True,
-    query_npatlas: bool = True,
-    query_broad_list: bool = False,
-    query_drugbank_list: bool = False,
-    query_drugcentral: bool = False,
-    query_lotus: bool = False,
+    current_iteration: int = 1,
+    full_iterations: int = 2,
 ):
+    if current_iteration > 1:
+        use_cached_parquet_file = True
+
     logging.info("Will run on %s", metadata_file)
     df = extract_prepare_input_data_prefect(
-        metadata_file, lib_id, plate_id_header, well_header, use_cached_parquet_file
+        metadata_file,
+        lib_id,
+        cfg.plate_id_header,
+        cfg.well_header,
+        use_cached_parquet_file,
     )
 
-    if query_pubchem_by_cid:
+    if cfg.query_pubchem_by_cid:
         df = pubchem_search_parent_by_cid_prefect(df, apply_structures=True)
 
     # Query pubchem by name and CAS
-    if query_pubchem_by_name:
+    if cfg.query_pubchem_by_name:
         df = pubchem_search_structure_by_name_prefect(df)
 
     save_intermediate_parquet_prefect(df, metadata_file)
 
     # get mol from smiles or inchi
     # calculate all identifiers from mol - monoisotopic_mass, ...
-    if calc_identifiers:
+    if cfg.calc_identifiers:
         df = clean_structure_add_mol_id_columns_prefect(df)
 
-    if query_pubchem_by_structure:
+    if cfg.query_pubchem_by_structure:
         df = pubchem_search_by_structure_prefect(df)
         save_intermediate_parquet_prefect(df, metadata_file)
 
-    if query_pubchem_by_cid:
+    if cfg.query_pubchem_by_cid:
         df = pubchem_search_parent_by_cid_prefect(df, apply_structures=True)
-        if calc_identifiers:
+        if cfg.calc_identifiers:
             df = clean_structure_add_mol_id_columns_prefect(df)
         save_intermediate_parquet_prefect(df, metadata_file)
 
@@ -263,21 +306,21 @@ def cleanup_file(
     tasks = []
 
     # GNPS cached version
-    if query_npclassifier:
+    if cfg.query_npclassifier:
         tasks.append(apply_np_classifier_prefect.submit(df))
 
     # GNPS cached version
-    if query_classyfire:
+    if cfg.query_classyfire:
         tasks.append(apply_classyfire_prefect.submit(df))
 
-    if query_npatlas:
+    if cfg.query_npatlas:
         tasks.append(search_np_atlas_prefect.submit(df))
 
-    if query_lotus:
+    if cfg.query_lotus:
         tasks.append(search_lotus_prefect.submit(df))
 
     # add new columns for cross references to other databases
-    if query_unichem:
+    if cfg.query_unichem:
         # xrefs are needed for other steps so run sequential here
         df = search_all_unichem_xrefs_prefect(df, metadata_file)
         save_intermediate_parquet_prefect(df, metadata_file)
@@ -286,17 +329,17 @@ def cleanup_file(
     df = ensure_synonyms_column(df)
     df = extract_synonym_ids(df)
 
-    if query_chembl:
+    if cfg.query_chembl:
         df = chembl_search_id_and_inchikey_prefect(df)
         save_intermediate_parquet_prefect(df, metadata_file)
 
-    if query_broad_list:
+    if cfg.query_broad_list:
         df = broad_list_search_prefect(df)
 
-    if query_drugbank_list:
+    if cfg.query_drugbank_list:
         df = drugbank_search_add_columns_prefect(df)
 
-    if query_drugcentral:
+    if cfg.query_drugcentral:
         df = drugcentral_search_prefect(df)
 
     # Converting numbers
@@ -343,19 +386,38 @@ def cleanup_file(
     # export metadata file
     save_results_prefect(df.copy(), metadata_file)
 
+    if current_iteration < full_iterations:
+        # run task again to fill all values and retry failed services
+        # run asynch so that this flow can finish and give way to the new call
+        run_async(
+            cfg=cfg,
+            metadata_file=metadata_file,
+            lib_id=lib_id,
+            flow_method=cleanup_file,
+            use_cached_parquet_file=True,
+            current_iteration=current_iteration + 1,
+            full_iterations=full_iterations,
+        )
 
-def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = True):
+
+def full_cleanup_file_chunked(
+    metadata_file, lib_id, use_cached_parquet_file: bool = True
+):
     try:
-        cleanup_file(
-            metadata_file,
-            lib_id,
-            use_cached_parquet_file=use_cached_parquet_file,
-            query_pubchem_by_name=True,
-            # need local files
+        cfg = MetadataCleanupConfig(
+            query_npatlas=False,
             query_broad_list=True,
-            query_drugbank_list=False,
+            query_drugbank_list=True,
             query_drugcentral=True,
             query_lotus=True,
+        )
+        run_async(
+            cfg=cfg,
+            metadata_file=metadata_file,
+            lib_id=lib_id,
+            flow_method=cleanup_file_chunked,
+            use_cached_parquet_file=use_cached_parquet_file,
+            full_iterations=2,
         )
     except:
         logging.exception("Exception in flow")
@@ -363,4 +425,13 @@ def full_cleanup_file(metadata_file, lib_id, use_cached_parquet_file: bool = Tru
 
 
 if __name__ == "__main__":
-    prefect.serve(cleanup_file.to_deployment("standard"))
+    prefect.serve(
+        cleanup_file_chunked.to_deployment(
+            "standard",
+            work_pool_name="local-work",
+        ),
+        cleanup_file.to_deployment(
+            "standard",
+            work_pool_name="local-work",
+        ),
+    )

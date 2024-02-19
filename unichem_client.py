@@ -146,14 +146,14 @@ def search_all_xrefs(
     )
 
     if len(filtered) == 0:  # no need to update
-        return pd.DataFrame()  # return empty dataframe
+        return df
 
     unichem_results = pd.concat(
         filtered.progress_apply(
             lambda row: search_unichem_xref_for_row(row), axis=1
         ).array
     )
-    # unichem_results = unichem_results.drop_duplicates().reset_index(drop=True)
+    unichem_results = unichem_results.drop_duplicates().reset_index(drop=True)
     if unichem_results is None or len(unichem_results) == 0:
         return df
 
@@ -187,7 +187,7 @@ def extract_ids_to_columns(
     ]
 
     date_now = iso_datetime_now()
-    target_df[MetaColumns.date_unichem_search] = [
+    results[MetaColumns.date_unichem_search] = [
         date_now if notnull(res) else None for res in results[MetaColumns.unichem_id]
     ]
 

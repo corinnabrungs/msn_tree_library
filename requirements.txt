@@ -12,6 +12,7 @@ tqdm==4.64.1
 pubchempy==1.0.4
 pyteomics
 pyarrow
+# 2.15
 prefect
 StrEnum==0.4.10
 requests==2.28.1

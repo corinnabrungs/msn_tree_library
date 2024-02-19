@@ -6,6 +6,7 @@ from rdkit.Chem import Descriptors, AllChem as Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
 from chembl_structure_pipeline import standardizer
+from tqdm import tqdm
 
 from meta_constants import MetaColumns
 from pandas_utils import notnull, isnull, remove_empty_strings
@@ -152,7 +153,8 @@ def _add_molid_columns(df) -> pd.DataFrame:
         get_rdkit_mol(smiles, inchi) for smiles, inchi in zip(df["smiles"], df["inchi"])
     ]
     df["mol"] = [
-        chembl_standardize_mol(mol) if notnull(mol) else np.NAN for mol in df["mol"]
+        chembl_standardize_mol(mol) if notnull(mol) else np.NAN
+        for mol in tqdm(df["mol"], "clean structure")
     ]
     df[MetaColumns.canonical_smiles] = [mol_to_canon_smiles(mol) for mol in df["mol"]]
     df[MetaColumns.isomeric_smiles] = [mol_to_isomeric_smiles(mol) for mol in df["mol"]]

@@ -147,7 +147,10 @@ def count_functional_groups(
 
 
 def count_functional_group(group, mol):
-    if pu.notnull(mol):
-        return len(mol.GetSubstructMatches(group.pattern))
-    else:
+    try:
+        if pu.notnull(mol):
+            return len(mol.GetSubstructMatches(group.pattern))
+        else:
+            return np.NAN
+    except:
         return np.NAN

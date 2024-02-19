@@ -1,0 +1,4 @@
+compound_name	synonyms	cas	target	formula	smiles	well_location	plate_id
+SC66		871361-88-5	Akt; Apoptosis	C18H16N2O	O=C1/C(CCC/C1=C\C2=CC=NC=C2)=C/C3=CC=NC=C3	A2	1
+Bafetinib	INNO-406; NS-187	859212-16-1	Autophagy; Bcr-Abl	C30H31F3N8O	O=C(C1=CC=C(C(C(F)(F)F)=C1)CN2C[C@@H](N(C)C)CC2)NC3=CC=C(C)C(NC4=NC=CC(C5=CN=CN=C5)=N4)=C3	A2	1
+BMS 299897		290315-45-6	γ-secretase	C24H21ClF3NO4S	FC1=CC=C(F)C(N([C@@H](C2=C(CCCC(O)=O)C=C(F)C=C2)C)S(C3=CC=C(Cl)C=C3)(=O)=O)=C1	A2	1

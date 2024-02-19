@@ -361,10 +361,16 @@ def is_iterable(obj):
         return False
 
 
-def divide_n_chunks(items, n_chunks, max_chunk_size: int = -1):
+def divide_n_chunks(
+    items,
+    n_chunks,
+    min_chunk_size: int = -1,
+    max_chunk_size: int = -1,
+):
     """
     divide series or dataframe into n chunks
     :param n: number of chunks
+    :param max_chunk_size: the minimum size of chunks will decrease n_chunks if needed. set to -1 to deactivate
     :param max_chunk_size: the maximum size of chunks will increase n_chunks if needed. set to -1 to deactivate
     :return: list of items split into n chunks
     """
@@ -374,6 +380,12 @@ def divide_n_chunks(items, n_chunks, max_chunk_size: int = -1):
     if max_chunk_size > 0:
         n = math.ceil(total_items / max_chunk_size)
         n_chunks = max(n, n_chunks)
+    if min_chunk_size > 0:
+        n = math.floor(total_items / min_chunk_size)
+        n_chunks = min(n, n_chunks)
+
+    if n_chunks <= 1:
+        return [items]
 
     return divide_chunks(items, math.ceil(total_items / n_chunks))
 
@@ -382,18 +394,24 @@ def divide_chunks(items, chunk_size):
     """
     :return: list of chunks of specified size
     """
-    return [items[i : i + chunk_size] for i in range(0, total_items, chunk_size)]
+    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 def save_chunks(
     df: pd.DataFrame,
     base_filename,
     n_chunks=4,
+    min_chunk_size: int = -1,
     max_chunk_size: int = -1,
     suffix="chunk",
     file_format=".parquet",
 ) -> list[pd.DataFrame]:
-    chunks = divide_n_chunks(df, n_chunks, max_chunk_size)
+    chunks = divide_n_chunks(df, n_chunks, min_chunk_size, max_chunk_size)
+
+    # for single chunk return
+    if len(chunks) == 1:
+        return chunks
+
     for i, subdf in enumerate(chunks):
         save_dataframe(
             subdf,
@@ -449,5 +467,26 @@ def check_if_chunks_available(
         file = add_filename_suffix(base_filename, f"{suffix}{0}", input_format)
         df = read_dataframe(file)
         return len(df) > 0
+    except:
+        return False
+
+
+def delete_chunks(
+    base_filename,
+    suffix="chunk",
+):
+    from pathlib import Path
+
+    if isnull_or_empty(suffix):
+        raise ValueError("suffix cannot be empty")
+    if isnull_or_empty(base_filename):
+        raise ValueError("base_filename cannot be empty")
+
+    try:
+        file = Path(base_filename)
+        matching_files = file.parent.glob(f"{file.stem}_{suffix}*")
+        for f in list(matching_files):
+            f.unlink()
+        return True
     except:
         return False
