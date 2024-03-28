@@ -7,6 +7,7 @@ import prefect
 from prefect.deployments import run_deployment
 from tqdm import tqdm
 import lotus_client
+from dictionary_of_np_client import dictionary_of_np_search
 import pandas_utils as pu
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
@@ -60,6 +61,7 @@ class MetadataCleanupConfig:
     query_drugbank_list: bool = False
     query_drugcentral: bool = False
     query_lotus: bool = False
+    query_dictionary_np: bool = False
 
 
 @task(name="Extract prepare data")
@@ -120,6 +122,11 @@ def broad_list_search_prefect(df):
     return broad_list_search(df)
 
 
+@task(name="dictionary_np_search")
+def dictionary_of_np_search_prefect(df):
+    return dictionary_of_np_search(df)
+
+
 @task(name="drugbank_search_add_columns")
 def drugbank_search_add_columns_prefect(df):
     return drugbank_search_add_columns(df)
@@ -172,10 +179,10 @@ def cleanup_file_chunked(
     metadata_file: str,
     lib_id: str,
     use_cached_parquet_file: bool = True,
-    n_thread=5,
+    n_thread=1,
     min_chunk_size=250,
-    max_chunk_size=1000,
-    full_iterations=2,
+    max_chunk_size=1000000,
+    full_iterations=1,
 ):
     if not use_cached_parquet_file:
         pu.delete_chunks(metadata_file)
@@ -228,7 +235,7 @@ def run_async(
     metadata_file: str,
     lib_id: str,
     flow_method,
-    deployment_name="standard",
+    deployment_name="local-deploy",
     use_cached_parquet_file: bool = True,
     current_iteration: int | None = None,
     full_iterations: int = 2,
@@ -259,7 +266,7 @@ def cleanup_file(
     lib_id: str,
     use_cached_parquet_file: bool = True,
     current_iteration: int = 1,
-    full_iterations: int = 2,
+    full_iterations: int = 1,
 ):
     if current_iteration > 1:
         use_cached_parquet_file = True
@@ -318,6 +325,9 @@ def cleanup_file(
 
     if cfg.query_lotus:
         tasks.append(search_lotus_prefect.submit(df))
+
+    if cfg.query_dictionary_np:
+        df = dictionary_of_np_search_prefect(df)
 
     # add new columns for cross references to other databases
     if cfg.query_unichem:
@@ -427,11 +437,11 @@ def full_cleanup_file_chunked(
 if __name__ == "__main__":
     prefect.serve(
         cleanup_file_chunked.to_deployment(
-            "standard",
+            "local-deploy",
             work_pool_name="local-work",
         ),
         cleanup_file.to_deployment(
-            "standard",
+            "local-deploy",
             work_pool_name="local-work",
         ),
     )
