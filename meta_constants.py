@@ -18,6 +18,7 @@ class MetaColumns(StrEnum):
     date_drugbank_search = auto()
     date_drugcentral_search = auto()
     date_wikidata_lotus_search = auto()
+    date_dictionary_np_search = auto()
     #
     structure_source = auto()
 

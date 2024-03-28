@@ -6,6 +6,7 @@ from tqdm import tqdm
 import lotus_client
 import synonyms
 import unichem_client
+from dictionary_of_np_client import dictionary_of_np_search
 from broadinstitute_client import broad_list_search
 from chembl_client import chembl_search_id_and_inchikey
 from drug_utils import get_clinical_phase_description, map_clinical_phase_to_number
@@ -196,6 +197,7 @@ def cleanup_file(
     query_drugbank_list: bool = False,
     query_drugcentral: bool = False,
     query_lotus: bool = False,
+    query_dictionary_np: bool = False,
 ):
     logging.info("Will run on %s", metadata_file)
     df = extract_prepare_input_data(
@@ -310,6 +312,9 @@ def cleanup_file(
 
     if query_lotus:
         df = lotus_client.apply_search_on_split_inchikey(df)
+
+    if query_dictionary_np:
+        df = dictionary_of_np_search(df)
 
     # export metadata file
     save_results(df, metadata_file)
