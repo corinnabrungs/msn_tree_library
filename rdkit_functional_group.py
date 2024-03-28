@@ -101,6 +101,10 @@ class FunctionalGroups(FunctionalGroup, Enum):
         "hexose",
         "[$(C(C1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2])[OX2]),$(C(C1C(C(C([O]-1)(C[OX2])[OX2])[OX2])[OX2])[OX2])]",
     )
+    amino_hexose = (
+        "amino_hexose",
+        "[$(C(C1C(C(C(C([O]-1)[OX2])[NX3])[OX2])[OX2])[OX2])]",
+    )
     deoxy_hexose = (
         "deoxy_hexose",
         "[C;!$([#6][#8])](C1C(C(C(C([O]-1)[OX2])[OX2])[OX2])[OX2])",
@@ -111,7 +115,7 @@ class FunctionalGroups(FunctionalGroup, Enum):
     )
     glycoside = (
         "glycoside",
-        combine([hexose, pentose, deoxy_hexose]),
+        combine([hexose, pentose, deoxy_hexose, amino_hexose]),
     )
     flavan = (
         "flavan",
