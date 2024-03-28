@@ -17,7 +17,7 @@ Deployment:
 - or by running deployment in the terminal
 
 ```bash
-prefect deploy metadata_cleanup_prefect:standard
+prefect deploy metadata_cleanup_prefect:local-deploy
 ```
 
 ## Create and run a worker pool
@@ -30,6 +30,7 @@ prefect work-pool create --type process local-work
 prefect work-pool update --concurrency-limit 5 local-work
 ```
 
+### start worker in pool to process
 ```bash
 prefect work-pool update --concurrency-limit 5 local-work
 prefect worker start --pool local-work
