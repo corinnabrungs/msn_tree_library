@@ -24,23 +24,6 @@ files_and_lib_ids = [
     (r"examples\test_metadata.tsv", "test"),
     # (r"examples\test_metadata_medium.tsv", "test_medium"),
     # (r"examples\test_metadata_small.tsv", "test_small"),
-    (
-        r"C:\git\msn_library\data\library\mce_new_run_parallel\mce_library_all.tsv",
-        "mce",
-    ),
-    # (r"C:\git\msn_library\data\nina\one_hundred_drug_test.csv", "nina_drug"),
-    # (r"C:\git\msn_library\data\nina\one_hundred_drug_test.csv", "nina_drug"),
-    ###
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk0.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk1.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk2.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk3.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk4.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk5.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk6.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk7.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk8.csv", "nina_reframe"),
-    # (r"C:\git\msn_library\data\nina\reframe\nina_reframe_chunk9.csv", "nina_reframe"),
 ]
 
 if __name__ == "__main__":
@@ -48,22 +31,32 @@ if __name__ == "__main__":
     # keep metadata cleanup prefect running
 
     cfg = MetadataCleanupConfig(
-        query_npatlas=False,
-        query_broad_list=True,
-        query_drugbank_list=True,
-        query_drugcentral=True,
-        query_lotus=True,
+        query_npatlas=True,
+        query_broad_list=False,
+        query_drugbank_list=False,
+        query_drugcentral=False,
+        query_lotus=False,
+        query_classyfire=True,
+        query_dictionary_np=False,
     )
 
     for metadata_file, lib_id in files_and_lib_ids:
         try:
+            # run_async(
+            #     cfg=cfg,
+            #     metadata_file=metadata_file,
+            #     lib_id=lib_id,
+            #     flow_method=cleanup_file_chunked,
+            #     use_cached_parquet_file=True,
+            #     full_iterations=1,
+            # )
             run_async(
                 cfg=cfg,
                 metadata_file=metadata_file,
                 lib_id=lib_id,
-                flow_method=cleanup_file_chunked,
+                flow_method=cleanup_file,
                 use_cached_parquet_file=True,
-                full_iterations=2,
+                full_iterations=1,
             )
         except:
             logging.exception("Exception in flow")
