@@ -45,4 +45,4 @@ your file are disabled for now.
 
 # Well visualization
 
-For more information go to the [documentation](\well_visualization.md).
+For more information go to the [documentation](well_visualization.md).
