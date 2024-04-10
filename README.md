@@ -1,4 +1,4 @@
-# metadata cleanup
+# Metadata cleanup
 
 ```bash
 pip install requirements
@@ -38,5 +38,11 @@ prefect worker start --pool local-work
 
 ## Run jobs
 
-Define jobs in jobs.py and run on prefect deployment.
+Define jobs in jobs.py and run on prefect deployment. The option to creat automatically chuncks of
+your file are disabled for now.
 
+# Sequence creation
+
+# Well visualization
+
+For more information go to the [documentation](\well_visualization.md).
