@@ -5,8 +5,8 @@ acquisition method, for example positive and negative ionization mode. An exampl
 well
 plate is shown below that were acquired in positive and negative ion mode.
 
-![Plate96](pictures\plate_example96.png)
-![Plate384](pictures\plate_example384.png)
+![Plate96](pictures/plate_example96.png)
+![Plate384](pictures/plate_example384.png)
 
 You need two notebooks for the visualization.
 
