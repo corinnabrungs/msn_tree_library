@@ -1,5 +1,10 @@
 # Metadata cleanup
 
+Please use the
+[template](https://docs.google.com/spreadsheets/d/1v6_IlGS3VgycGc-mSSdNeocY-CFXpONVZbuh3XNLX2E/edit?usp=sharing)
+for your metadata for having same column names and minimum needed information for the query. If no
+structure information is provided, it is queried from PubChem by Name search.
+
 For querying other databases, some need a local file and/or special access otherwise set it to
 False in the jobs.py:
 
@@ -17,9 +22,8 @@ Broad institute - Drug Repurposing
 Hub:
 [Download](https://repo-hub.broadinstitute.org/repurposing#download-data)
 
-DrugBank (access needed): [Download](https://go.drugbank.com/releases/latest)  and
-run `drugbank_extraction.py` on
-that file
+DrugBank (access needed): [Download](https://go.drugbank.com/releases/latest) and
+run `drugbank_extraction.py` on that file
 
 DrugCentral (SQL dump file): [Download](https://drugcentral.org/download)
 
