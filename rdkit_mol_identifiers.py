@@ -211,6 +211,6 @@ def ensure_smiles_column(df: pd.DataFrame) -> pd.DataFrame:
 
     if len(headers)>1:
         # fill NA values by priority
-        for col in cols[1:]
+        for col in cols[1:]:
             df[MetaColumns.smiles] = df[MetaColumns.smiles].fillna(col)
     return df
