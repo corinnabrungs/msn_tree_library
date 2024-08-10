@@ -189,24 +189,28 @@ def ensure_smiles_column(df: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={"isomerical_smiles": MetaColumns.isomeric_smiles})
 
     # ensure smiles column by priority
-    cols = [
+    headers = [
         MetaColumns.isomeric_smiles,
         MetaColumns.canonical_smiles,
         MetaColumns.smiles,
         "SMILES",
         "Smiles",
     ]
-    df = remove_empty_strings(df, cols)
 
-    for col in cols:
-        if col in df.columns:
-            df[MetaColumns.smiles] = df[col]
-            break
-    if MetaColumns.smiles not in df.columns:
+    headers = [h for h in headers if h in df.columns]
+
+    if len(headers)==0:
         df[MetaColumns.smiles] = None
+        return df
 
-    # fill NA values by priority
-    for col in cols[1:]:
-        if col in df.columns:
-            df[MetaColumns.smiles] = df[MetaColumns.smiles].fillna(df[col])
+    df = remove_empty_strings(df, headers)
+
+    # keep columns temporarily
+    cols = [df[h] for h in headers]
+    df[MetaColumns.smiles] = cols[0]
+
+    if len(headers)>1:
+        # fill NA values by priority
+        for col in cols[1:]
+            df[MetaColumns.smiles] = df[MetaColumns.smiles].fillna(col)
     return df
