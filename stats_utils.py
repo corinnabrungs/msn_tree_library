@@ -27,11 +27,7 @@ def drop_unique_inchikey_polarity(
         unique_dict[inchikey] = combine_polarity(oldpolarity, polarity)
 
     df[results_column] = [unique_dict.get(inchikey) for inchikey in df[inchikey_column]]
-    df = (
-        df.sort_values(by=["detected"])
-        .drop_duplicates([results_column, inchikey_column])
-        .sort_index()
-    )
+    df = df.sort_values(by=["detected"]).drop_duplicates(inchikey_column).sort_index()
 
     # df[df["inchikey"].duplicated(keep=False)][["inchikey", "polarity", "new_polarity"]]
     return df
