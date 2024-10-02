@@ -35,6 +35,10 @@ def read_mgf(infile, lib=None) -> pd.DataFrame:
         df["compound_name"] = df["name"]
     if "monoisotopic_mass" not in df.columns:
         df["monoisotopic_mass"] = df["exactmass"]
+    if "other_matched_compounds" not in df.columns:
+        df["other_matched_compounds"] = None
+    if "collision_energy" not in df.columns:
+        df["collision_energy"] = df["collision energy"]
     if "spectype" not in df.columns:
         df["spectype"] = None
     df["spectype"] = df["spectype"].fillna("BEST_TIC")
@@ -43,10 +47,10 @@ def read_mgf(infile, lib=None) -> pd.DataFrame:
             ast.literal_eval(energies) if notnull(energies) else np.NAN
             for energies in (df["msn_collision_energies"])
         ]
-        df["collision energy"] = [
+        df["collision_energy"] = [
             extract_energies(energy, msn_energies)
             for energy, msn_energies in zip(
-                df["collision energy"], df["msn_collision_energies"]
+                df["collision_energy"], df["msn_collision_energies"]
             )
         ]
     if "quality_explained_intensity" in df.columns:
