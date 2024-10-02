@@ -31,18 +31,19 @@ umap_df = pu.read_dataframe(
     r"C:\git\msn_library\data\acquisition_results\20240527_public_spectral_libraries_and_new_nist23_smiles_tmap_coord.tsv"
 )
 graph = dcc.Graph(id="umap-plot", clear_on_unhover=True, config=dict(scrollZoom=True))
+libraries = [
+    "msnlib",
+    "massbankeu",
+    "mona",
+    "gnps",
+    "mzcloud",
+    "nist23",
+    "open",
+    "commercial",
+    "available",
+]
 dropdown = dcc.Dropdown(
-    [
-        "msnlib",
-        "massbankeu",
-        "mona",
-        "gnps",
-        "mzcloud",
-        "nist23",
-        "open",
-        "commercial",
-        "available",
-    ],
+    libraries,
     "msnlib",
     id="set-select",
     clearable=False,
@@ -54,9 +55,9 @@ app.layout = html.Div([dropdown, graph, tooltip], style=dict(width="200px"))
 
 @app.callback(Output(graph, "figure"), Input(dropdown, "value"))
 def update_figure(dataset):
-    umap_df = umap_df.sort_values(by=dataset)
+    sorted = umap_df.sort_values(by=dataset)
     fig = px.scatter(
-        umap_df,
+        sorted,
         x="x",
         y="y",
         color=dataset,
@@ -65,7 +66,7 @@ def update_figure(dataset):
         color_discrete_map={False: "#aaaaaa", True: "#BF2C84"},
     )
     fig.update_traces(hoverinfo="none", hovertemplate=None)
-    fig.update_traces(marker={"size": 4})
+    fig.update_traces(marker={"size": 3})
     fig.update_layout(
         dragmode="pan",
         width=970,
@@ -73,6 +74,7 @@ def update_figure(dataset):
         legend={"itemsizing": "constant"},
         legend_title_text=None,
     )
+
     return fig
 
 
@@ -129,4 +131,19 @@ def display_hover(hoverData):
 
 
 if __name__ == "__main__":
+    for lib in libraries:
+        fig = update_figure(lib)
+        fig.update_layout(title=f"<b>{lib}</b>", title_x=0.5)
+        fig.write_html(
+            r"C:\git\msn_library\figures\public_msn_comparison\{}.html".format(lib)
+        )
+        fig.write_image(
+            r"C:\git\msn_library\figures\public_msn_comparison\{}.pdf".format(lib)
+        )
+        fig.write_image(
+            r"C:\git\msn_library\figures\public_msn_comparison\{}.png".format(lib)
+        )
     app.run()
+    app.write_html(
+        r"C:\git\msn_library\figures\public_msn_comparison\all_libraries.html"
+    )
