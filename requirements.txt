@@ -25,4 +25,7 @@ SPARQLWrapper==2.0.0
 black[d]
 rustworkx
 
+dash
+
+
 git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
