@@ -73,9 +73,9 @@ class MetaColumns(StrEnum):
     kegg_ligand_id = auto()
     hmdb_id = auto()
     # classifications
-    npclassifier_class_results = auto()
-    npclassifier_superclass_results = auto()
-    npclassifier_pathway_results = auto()
+    npclassifier_class = auto()
+    npclassifier_superclass = auto()
+    npclassifier_pathway = auto()
     npclassifier_isglycoside = auto()
     classyfire_kingdom = auto()
     classyfire_superclass = auto()
