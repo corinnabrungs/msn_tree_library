@@ -13,7 +13,8 @@ pubchempy==1.0.4
 pyteomics
 pyarrow
 # 2.15
-prefect
+prefect==2.15.0
+griffe==0.28.2
 StrEnum==0.4.10
 requests==2.28.1
 joblib==1.2.0
