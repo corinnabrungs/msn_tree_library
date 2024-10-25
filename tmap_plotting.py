@@ -1,3 +1,6 @@
+## Adapted from https://github.com/boecker-lab/myopic-mces-data/blob/main/umap_vis.py
+
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
