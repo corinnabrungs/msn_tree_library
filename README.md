@@ -46,10 +46,10 @@ Deployment:
 - or by running deployment in the terminal
 
 ```bash
-prefect deploy metadata_cleanup_prefect:local-deploy
+prefect deploy metadata_cleanup_prefect:cleanup_file --name local-deploy --pool local-work
 ```
 
-## Create and run a worker pool (other option)
+## Create and run a worker pool
 
 - create worker pool with the name defined in the deployment (e.g., see metadata_cleanup_prefect.py
   main).
