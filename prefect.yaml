@@ -19,13 +19,11 @@ pull:
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
-  - name: hello-flow
+  - name: local-deploy
     version: null
     tags: [ ]
-    description: |-
-      Given a GitHub repository, logs the number of stargazers
-      and contributors for that repo.
-    entrypoint: hello_flow.py:repo_info
+    description: null
+    entrypoint: metadata_cleanup_prefect:cleanup_file
     parameters: { }
     work_pool:
       name: local-work
