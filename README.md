@@ -33,11 +33,18 @@ DrugCentral (SQL dump file): [Download](https://drugcentral.org/download)
 pip install requirements
 ```
 
-## run with prefect 2 (preferred)
+## run with prefect 2
 
 ```bash
 prefect server start
 ```
+
+Either remove the prefect.yaml and create new during deployment (see below) OR change the directory
+within the file to your local path
+
+- under pull:
+    - prefect.deployments.steps.set_working_directory:
+      directory: C:\path\to\your\project
 
 Deployment:
 
@@ -48,6 +55,13 @@ Deployment:
 ```bash
 prefect deploy metadata_cleanup_prefect:cleanup_file --name local-deploy --pool local-work
 ```
+
+Create new prefect.yaml if needed:
+
+If prefect.yaml cannot be found, type n in the terminal for the two following questions, untill the
+question appears to save configuration:
+Would you like to save configuration for this deployment for faster deployments in the
+future? [y/n]: y
 
 ## Create and run a worker pool
 
