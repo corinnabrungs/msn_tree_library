@@ -66,7 +66,8 @@ future? [y/n]: y
 ## Create and run a worker pool
 
 - create worker pool with the name defined in the deployment (e.g., see metadata_cleanup_prefect.py
-  main).
+  main). If you crated the worker already before you can skip the work-pool create and go to start
+  worker immediately.
 
 ```bash
 prefect work-pool create --type process local-work
