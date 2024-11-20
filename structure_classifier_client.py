@@ -81,21 +81,19 @@ def apply_np_classifier(
         unique_smiles_dict[smiles] for smiles in filtered[MetaColumns.smiles]
     ]
     # extract and join values from json array - only isglycoside is already a value
-    json_col(
-        filtered, filtered["result_column"], NP_CLASSIFIER_PREFIX, "class_results", join
-    )
+    json_col(filtered, filtered["result_column"], NP_CLASSIFIER_PREFIX, "class", join)
     json_col(
         filtered,
         filtered["result_column"],
         NP_CLASSIFIER_PREFIX,
-        "superclass_results",
+        "superclass",
         join,
     )
     json_col(
         filtered,
         filtered["result_column"],
         NP_CLASSIFIER_PREFIX,
-        "pathway_results",
+        "pathway",
         join,
     )
     json_col(filtered, filtered["result_column"], NP_CLASSIFIER_PREFIX, "isglycoside")
