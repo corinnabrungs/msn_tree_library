@@ -9,9 +9,9 @@ lotus_prefix = "lotus_"
 
 def read_lotus_dataframe(use_unique_split_inchikeys: bool = True) -> pd.DataFrame:
     if use_unique_split_inchikeys:
-        return read_dataframe("data/lotus_unique_split_inchikey_download.csv")
+        return read_dataframe("data/lotus_unique_split_inchikey_download.parquet")
     else:
-        return read_dataframe("data/lotus_download.csv")
+        return read_dataframe("data/lotus_download.parquet")
 
 
 def apply_search_on_split_inchikey(df: pd.DataFrame) -> pd.DataFrame:
