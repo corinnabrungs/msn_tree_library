@@ -26,6 +26,7 @@ matplotlib==3.5.2
 SPARQLWrapper==2.0.0
 black[d]
 rustworkx
+openpyxl
 
 dash
 
