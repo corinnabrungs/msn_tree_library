@@ -30,5 +30,5 @@ rustworkx
 dash
 
 
-git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
-// or pip install install chembl_structure_pipeline
+#git+https://github.com/chembl/ChEMBL_Structure_Pipeline.git
+pip install chembl_structure_pipeline
