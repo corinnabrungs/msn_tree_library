@@ -70,15 +70,24 @@ name_search_columns = [
 
 
 def pubchem_search_by_names(row) -> str | None:
-    if notnull(row["pubchem"]):
-        return row["pubchem"]
+    try:
+        if notnull(row["pubchem"]):
+            return row["pubchem"]
 
-    for col in name_search_columns:
-        value = get_or_else(row, col)
-        if isinstance(value, str) and len(value) > 0:
-            compound = search_pubchem_by_name(value)
-            if notnull(compound):
-                return compound
+        for col in name_search_columns:
+            value = get_or_else(row, col)
+            if isinstance(value, str) and len(value) > 0:
+                print(f"Searching for: {value}")
+                try:
+                    compound = search_pubchem_by_name(value)
+                    if notnull(compound):
+                        return compound
+                except Exception as e:  # Catch specific exceptions if possible
+                    print(f"Error while searching for {value}: {e}")
+                    pass
+    except Exception as e:
+    # Catch any error that occurs in the function itself
+        print(f"Unexpected error occurred during the process: {e}")
 
     return None
 
