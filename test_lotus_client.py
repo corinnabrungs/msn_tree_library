@@ -15,8 +15,8 @@ class Test(TestCase):
 
         self.assertEqual(len(results.columns), 14)
         self.assertEqual(len(results), 6)
-        assert results.at[0, "parent_taxon_rank_label"] == "genus; order"
-        assert results.at[2, "taxon_name"] == "Glycyrrhiza glabra; Ixora coccinea"
+        assert results.at[0, "lotus_parent_taxon_rank_label"] == "genus; order"
+        assert results.at[2, "lotus_taxon_name"] == "Glycyrrhiza glabra; Ixora coccinea"
 
     def test_read_lotus_dataframe(self):
         df = lotus_client.read_lotus_dataframe()
