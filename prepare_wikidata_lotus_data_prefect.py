@@ -135,7 +135,7 @@ def get_sparql_json_results(
         sys.version_info[0],
         sys.version_info[1],
     )
-    # TODO adjust user agent; see https://w.wiki/CX6
+    # TODO adjust user agent; see https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
     sparql = SPARQLWrapper(endpoint_url, agent=user_agent)
     sparql.setQuery(sparql_query)
     sparql.setReturnFormat(JSON)
@@ -269,7 +269,7 @@ def download_lotus_prefect():
         .drop_duplicates(["taxon", "structure", "reference"])
     )
 
-    # clean strucutres and drop not needed columns
+    # clean structures and drop not needed columns
     excluded_cols = [
         MetaColumns.smiles,
         MetaColumns.canonical_smiles,
@@ -277,7 +277,7 @@ def download_lotus_prefect():
         MetaColumns.inchi,
     ]
     columns = [col for col in df.columns if col not in excluded_cols]
-    df = clean_structure_add_mol_id_columns_prefect(structures_df)[columns]
+    df = clean_structure_add_mol_id_columns_prefect(df)[columns]
 
     save_lotus_dump(df)
     save_unique_inchikey_dump(df)
