@@ -134,9 +134,10 @@ INFO = """
 "C:/Program Files/PostgreSQL/15/scripts/runpsql.bat"
 2. Windows users might want to add "cmd.exe /c chcp 1252" as the first line in the runpsql.bat script to avoid the warning about characters space not matching.
 3. Download the postgresql dump from https://drugcentral.org/download and unzip the .gz file (e.g., by 7-zip). 
-4. Run runpsql.bat and connect to the database (with the chosen name), in this console (make sure to use / instead of \\):
-5. Load all data by calling the command \i C:/data/drugcentral_dump_xy.sql
-6. Connect to the database using this script after changing the user, password, and database name in drugcentral_database.ini 
+4. Open pgAdmin4.exe and create a new database, name DrugCentral (or any other name)
+5. Run runpsql.bat and connect to the database (with the chosen name), in this console (make sure to use / instead of \\):
+6. Load all data by calling the command \i C:/data/drugcentral_dump_xy.sql
+7. Connect to the database using this script after changing the user, password, and database name in drugcentral_database.ini 
 """
 
 
