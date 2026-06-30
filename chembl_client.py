@@ -99,9 +99,7 @@ def chembl_search_id_and_inchikey(
     filtered["usan_stem_definition"] = [
         compound["usan_stem_definition"] for compound in compounds
     ]
-    filtered["chembl_indication"] = [
-        compound["indication_class"] for compound in compounds
-    ]
+    # ]
     filtered["chembl_atc_classifications"] = [
         compound["atc_classifications"] for compound in compounds
     ]
@@ -109,14 +107,8 @@ def chembl_search_id_and_inchikey(
     # properties sometimes None
     props = [compound["molecule_properties"] for compound in compounds]
 
-    filtered["molecular_species"] = [
-        prop["molecular_species"] if notnull(prop) else None for prop in props
-    ]
     filtered["chembl_alogp"] = [
         prop["alogp"] if notnull(prop) else None for prop in props
-    ]
-    filtered["chembl_cx_logp"] = [
-        prop["cx_logp"] if notnull(prop) else None for prop in props
     ]
 
     # was changed by ChEMBL api
@@ -124,6 +116,16 @@ def chembl_search_id_and_inchikey(
     # filtered["withdrawn_reason"] = [compound["withdrawn_reason"] for compound in compounds]
     # filtered["withdrawn_year"] = pd.array([compound["withdrawn_year"] for compound in compounds], dtype=pd.Int64Dtype())
     # filtered["withdrawn_country"] = [compound["withdrawn_country"] for compound in compounds]
+    # filtered["chembl_cx_logp"] = [
+    #     prop["cx_logp"] if notnull(prop) else None for prop in props
+    # ]
+    # filtered["molecular_species"] = [
+    #     prop["molecular_species"] if notnull(prop) else None for prop in props
+    # ]
+
+    # TODO add indication new API, maybe update package
+    # filtered["chembl_indication"] = [
+    #     compound["indication_class"] for compound in compounds
 
     # add new synonyms
     new_synonyms = [extract_synonyms(compound) for compound in compounds]

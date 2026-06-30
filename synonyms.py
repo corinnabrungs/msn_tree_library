@@ -91,6 +91,8 @@ def add_synonyms_columns(
             add_synonyms(olds, news, prepend)
             for olds, news in zip(df[MetaColumns.synonyms], col)
         ]
+    if MetaColumns.synonyms not in df:
+        df[MetaColumns.synonyms] = None
 
     if notnull(new_synonyms):
         col = new_synonyms

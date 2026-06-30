@@ -27,6 +27,6 @@ class Test(TestCase):
         )
         df = chembl_client.chembl_search_id_and_inchikey(df)
 
-        cols = ["chembl_alogp", "indication", "oral", "first_approval", "prodrug"]
+        cols = ["chembl_alogp", "oral", "first_approval", "prodrug"]
         for col in cols:
             assert col in df.columns
